@@ -1,7 +1,7 @@
 # hanfix installer for Windows:
-#   irm https://raw.githubusercontent.com/NaNIsaac/hanfix/main/install.ps1 | iex
+#   irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
 # Puts hanfix.exe in $env:HANFIX_INSTALL_DIR (default %LOCALAPPDATA%\Programs\hanfix) and adds it to
-# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.1'. Run it again (or hanfix --update) to update.
+# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.2'. Run it again (or hanfix --update) to update.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 

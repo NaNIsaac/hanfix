@@ -268,7 +268,8 @@ fn usage_error(msg: &str) -> ExitCode {
     ExitCode::from(2)
 }
 
-const INSTALLER: &str = "https://raw.githubusercontent.com/NaNIsaac/hanfix/main/install";
+// From the latest release rather than raw.githubusercontent.com, whose CDN can serve a stale copy for minutes.
+const INSTALLER: &str = "https://github.com/NaNIsaac/hanfix/releases/latest/download/install";
 
 /// Re-run the release installer into the folder this binary lives in. The installer checks the
 /// SHA-256 and, on Windows, renames the running hanfix.exe out of the way instead of overwriting it.
@@ -288,7 +289,7 @@ fn update() -> ExitCode {
     } else {
         let mut c = std::process::Command::new("sh");
         c.args(["-c", &format!(
-            "if command -v curl >/dev/null 2>&1; then curl -fsSL {INSTALLER}.sh; else wget -qO- {INSTALLER}.sh; fi | sh"
+            "set -e; if command -v curl >/dev/null 2>&1; then s=$(curl -fsSL {INSTALLER}.sh); else s=$(wget -qO- {INSTALLER}.sh); fi; printf '%s\n' \"$s\" | sh"
         )]);
         c
     };
