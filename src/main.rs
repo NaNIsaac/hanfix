@@ -174,7 +174,7 @@ const FISH: &str = r#"function __HF__ --description 'hanfix: fix and re-run the 
         set_color green; printf '%s' $fixed; set_color normal
         read -P '  [Enter / Ctrl+C] ' _; or return 130
     end
-    history append -- $fixed 2>/dev/null
+    # no history entry: fish 3 has no `history append` (an unknown subcommand opens the help in a pager)
     eval $fixed
 end
 alias __KO__ __HF__
