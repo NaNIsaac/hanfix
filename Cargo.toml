@@ -1,0 +1,19 @@
+[package]
+name = "hanfix"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Fix commands and text typed in the wrong keyboard layout (Korean 2-set <-> QWERTY)"
+authors = ["Isaac Yong"]
+license = "MIT"
+repository = "https://github.com/NaNIsaac/hanfix"
+readme = "README.md"
+keywords = ["korean", "hangul", "keyboard", "cli", "shell"]
+categories = ["command-line-utilities", "text-processing"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"
+panic = "abort"
