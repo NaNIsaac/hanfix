@@ -18,6 +18,16 @@ jobs:
       - name: PowerShell integration
         shell: pwsh
         run: ./tests/shells.ps1
+      - name: installer (latest release)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            pwsh -NoProfile -Command '$env:HANFIX_INSTALL_DIR="$env:RUNNER_TEMP\h"; ./install.ps1'
+            "$RUNNER_TEMP/h/hanfix.exe" ㅣㄴ -ㅁ
+          else
+            HANFIX_INSTALL_DIR="$RUNNER_TEMP/h" sh install.sh
+            "$RUNNER_TEMP/h/hanfix" ㅣㄴ -ㅁ
+          fi
       - name: bash, zsh, fish integration
         if: runner.os == 'Linux'
         run: |

@@ -1,7 +1,7 @@
 # hanfix installer for Windows:
 #   irm https://raw.githubusercontent.com/NaNIsaac/hanfix/main/install.ps1 | iex
 # Puts hanfix.exe in $env:HANFIX_INSTALL_DIR (default %LOCALAPPDATA%\Programs\hanfix) and adds it to
-# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.0'.
+# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.1'. Run it again (or hanfix --update) to update.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -17,12 +17,19 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString() + '.exe')
 try {
     Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $tmp
-    $want = ((Invoke-WebRequest -UseBasicParsing "$base/$asset.sha256").Content.ToString().Trim() -split '\s+')[0]
+    # GitHub serves the .sha256 as binary, so read it from a file rather than from .Content
+    Invoke-WebRequest -UseBasicParsing "$base/$asset.sha256" -OutFile "$tmp.sha256"
+    $want = ((Get-Content -Raw "$tmp.sha256").Trim() -split '\s+')[0]
     $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash
     if ($want -ne $got) { throw "hanfix: checksum mismatch (expected $want, got $got)" }
-    Move-Item -Force $tmp (Join-Path $dir 'hanfix.exe')
+    # A running hanfix.exe (hanfix --update) cannot be overwritten, but it can be renamed.
+    $exe = Join-Path $dir 'hanfix.exe'
+    Remove-Item -Force "$exe.old" -ErrorAction SilentlyContinue
+    if (Test-Path $exe) { Move-Item -Force $exe "$exe.old" }
+    Move-Item -Force $tmp $exe
+    Remove-Item -Force "$exe.old" -ErrorAction SilentlyContinue   # stays only while the old one runs
 } finally {
-    if (Test-Path $tmp) { Remove-Item -Force $tmp }
+    Remove-Item -Force $tmp, "$tmp.sha256" -ErrorAction SilentlyContinue
 }
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -33,5 +40,6 @@ if (($userPath -split ';') -notcontains $dir) {
 if (($env:Path -split ';') -notcontains $dir) { $env:Path += ";$dir" }
 
 Write-Host "hanfix: installed $(& (Join-Path $dir 'hanfix.exe') --version) to $dir"
+if ($env:HANFIX_UPDATE) { return }
 Write-Host 'hanfix: to fix the previous command with hf, run this once and open a new terminal:'
 Write-Host "    Add-Content `$PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'"

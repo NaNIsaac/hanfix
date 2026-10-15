@@ -223,6 +223,7 @@ fn init_script(shell: &str, name: &str) -> String {
 
 const USAGE: &str = "usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --init {bash,zsh,fish,powershell} [--alias NAME]
+       hanfix --update
 ";
 
 fn help() -> String {
@@ -241,6 +242,7 @@ so the \"-ㅁ\" in \"hanfix ㅣㄴ -ㅁ\" is text (= \"-a\"). Put \"--\" before 
 options:
   -h, --help          show this help and exit
   -V, -v, --version   show the version and exit
+  --update            install the latest release over this copy (re-runs the installer)
   --to {{ko,en}}        force the direction: ko = keys to Hangul, en = Hangul to keys
   --init SHELL        print the shell function that fixes and re-runs the previous
                       command; SHELL is one of: {}
@@ -266,6 +268,40 @@ fn usage_error(msg: &str) -> ExitCode {
     ExitCode::from(2)
 }
 
+const INSTALLER: &str = "https://raw.githubusercontent.com/NaNIsaac/hanfix/main/install";
+
+/// Re-run the release installer into the folder this binary lives in. The installer checks the
+/// SHA-256 and, on Windows, renames the running hanfix.exe out of the way instead of overwriting it.
+fn update() -> ExitCode {
+    let dir = match std::env::current_exe().map(|p| p.parent().map(|d| d.to_path_buf())) {
+        Ok(Some(d)) => d,
+        _ => {
+            eprintln!("hanfix: error: cannot find where hanfix is installed");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("hanfix: updating {} in {}", env!("CARGO_PKG_VERSION"), dir.display());
+    let mut cmd = if cfg!(windows) {
+        let mut c = std::process::Command::new("powershell");
+        c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &format!("irm {INSTALLER}.ps1 | iex")]);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.args(["-c", &format!(
+            "if command -v curl >/dev/null 2>&1; then curl -fsSL {INSTALLER}.sh; else wget -qO- {INSTALLER}.sh; fi | sh"
+        )]);
+        c
+    };
+    match cmd.env("HANFIX_INSTALL_DIR", &dir).env("HANFIX_UPDATE", "1").status() {
+        Ok(st) if st.success() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(e) => {
+            eprintln!("hanfix: error: cannot start the installer: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn run(mut args: Vec<String>) -> ExitCode {
     let (mut to, mut shell, mut name) = (None, None, "hf".to_string());
     // Leading options only: the text itself may start with "-" ("-ㅁ" is a mistyped "-a").
@@ -283,6 +319,7 @@ fn run(mut args: Vec<String>) -> ExitCode {
                 println!("hanfix {}", env!("CARGO_PKG_VERSION"));
                 return ExitCode::SUCCESS;
             }
+            "--update" => return update(),
             _ => {}
         }
         let (opt, val) = match a.split_once('=') {

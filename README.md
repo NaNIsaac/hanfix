@@ -39,13 +39,25 @@ irm https://raw.githubusercontent.com/NaNIsaac/hanfix/main/install.ps1 | iex
    - Windows: `%LOCALAPPDATA%\Programs\hanfix`. 이 폴더를 사용자 PATH에 추가합니다.
 4. 셸 설정에 넣을 한 줄을 알려 줍니다.
 
-설치 폴더는 `HANFIX_INSTALL_DIR`로, 버전은 `HANFIX_VERSION=v0.2.0`처럼 바꿀 수 있습니다.
+설치 폴더는 `HANFIX_INSTALL_DIR`로, 버전은 `HANFIX_VERSION=v0.2.1`처럼 바꿀 수 있습니다.
 
 Rust가 있으면 소스에서 바로 설치할 수도 있습니다.
 
 ```sh
 cargo install --git https://github.com/NaNIsaac/hanfix
 ```
+
+## 업데이트
+
+```sh
+hanfix --update
+```
+
+- 설치 스크립트를 다시 실행해 최신 릴리스로 바꿉니다. 설치 위치는 지금 실행 중인 hanfix가 있는 폴더입니다.
+- 체크섬 확인도 처음 설치할 때와 같이 합니다.
+- 설치 명령(`curl … | sh`, `irm … | iex`)을 다시 실행해도 같은 결과입니다.
+- `cargo install`로 설치했다면 `cargo install --git https://github.com/NaNIsaac/hanfix --force`를 쓰세요.
+- 지금 버전은 `hanfix -V`로 확인합니다.
 
 ## 셸 설정
 
@@ -107,12 +119,14 @@ hanfix --to en 한글           ->  gksrmf
 ```
 usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --init {bash,zsh,fish,powershell} [--alias NAME]
+       hanfix --update
 ```
 
 | 옵션 | 설명 |
 |---|---|
 | `-h`, `--help` | 도움말을 출력합니다. |
 | `-V`, `-v`, `--version` | 버전을 출력합니다. |
+| `--update` | 최신 릴리스로 업데이트합니다. |
 | `--to {ko,en}` | 변환 방향을 정합니다. `ko`는 영문 키 → 한글, `en`은 한글 → 영문 키입니다. |
 | `--init SHELL` | `hf` 함수를 정의하는 셸 코드를 출력합니다. |
 | `--alias NAME` | `--init`이 만드는 함수 이름입니다. 기본값은 `hf`입니다. |

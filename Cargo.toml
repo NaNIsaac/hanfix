@@ -1,6 +1,6 @@
 [package]
 name = "hanfix"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.80"
 description = "Fix commands and text typed in the wrong keyboard layout (Korean 2-set <-> QWERTY)"
