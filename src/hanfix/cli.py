@@ -6,6 +6,9 @@
 
 Direction is detected per run: input containing Hangul is turned back into QWERTY keys,
 anything else is composed into Hangul. Force it with --to ko / --to en.
+
+    hanfix --init powershell | bash    -> shell function `hf` (alias `ㅗㄹ`) that fixes and re-runs
+                                          the previous command, like thefuck
 """
 
 from __future__ import annotations
@@ -99,12 +102,51 @@ def fix(text: str, to: str | None = None) -> str:
     return decompose(text) if to == "en" else compose(text)
 
 
+# Shell functions that fix and re-run the previous command, the way `thefuck` does. Both names are
+# defined: `hf`, and `ㅗㄹ`, which is what typing "hf" gives when the Korean layout is still on.
+INIT = {
+    "powershell": r"""
+function global:hf {
+    $last = (Get-History -Count 1).CommandLine
+    if (-not $last) { Write-Host 'hanfix: no previous command'; return }
+    $fixed = (hanfix --to en $last | Out-String).TrimEnd()
+    if ($fixed -eq $last) { Write-Host 'hanfix: nothing to fix'; return }
+    Write-Host "$fixed  [Enter / Ctrl+C]" -ForegroundColor Green -NoNewline
+    $null = [Console]::ReadLine()
+    try { [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($fixed) } catch {}
+    Invoke-Expression $fixed
+}
+Set-Alias -Name 'ㅗㄹ' -Value hf -Scope Global
+""",
+    "bash": r"""
+hf() {
+    local last fixed
+    last=$(fc -ln -2 -2 2>/dev/null | sed 's/^[[:space:]]*//')
+    [ -z "$last" ] && { echo 'hanfix: no previous command'; return 1; }
+    fixed=$(hanfix --to en "$last")
+    [ "$fixed" = "$last" ] && { echo 'hanfix: nothing to fix'; return 1; }
+    printf '\033[32m%s\033[0m  [Enter / Ctrl+C]' "$fixed"; read -r _
+    history -s "$fixed"
+    eval "$fixed"
+}
+alias ㅗㄹ=hf
+""",
+}
+
+
 def main(argv: list[str] | None = None) -> int:
-    # Only a leading --to / -h are options: everything else is text, including "-ㅁ" (= "-a").
+    # Only a leading --to / --init / -h are options: everything else is text, including "-ㅁ" (= "-a").
     args = list(sys.argv[1:] if argv is None else argv)
     to = None
     if args[:1] in (["-h"], ["--help"]):
         print(__doc__)
+        return 0
+    if args[:1] == ["--init"]:
+        shell = args[1] if len(args) > 1 else ""
+        if shell not in INIT:
+            sys.stderr.write(f"hanfix --init: choose one of {', '.join(INIT)}\n")
+            return 2
+        sys.stdout.write(INIT[shell].lstrip())
         return 0
     if args[:1] == ["--to"] and len(args) > 1 and args[1] in ("ko", "en"):
         to, args = args[1], args[2:]
