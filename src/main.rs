@@ -284,6 +284,7 @@ fn update() -> ExitCode {
     println!("hanfix: updating {} in {}", env!("CARGO_PKG_VERSION"), dir.display());
     let mut cmd = if cfg!(windows) {
         let mut c = std::process::Command::new("powershell");
+        c.env_remove("PSModulePath"); // inherited from PowerShell 7, it breaks Windows PowerShell's modules
         c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &format!("irm {INSTALLER}.ps1 | iex")]);
         c
     } else {

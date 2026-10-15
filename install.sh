@@ -1,7 +1,7 @@
 #!/bin/sh
 # hanfix installer for Linux and macOS:
 #   curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
-# Puts the binary in $HANFIX_INSTALL_DIR (default ~/.local/bin). Pin a release with HANFIX_VERSION=v0.2.2.
+# Puts the binary in $HANFIX_INSTALL_DIR (default ~/.local/bin). Pin a release with HANFIX_VERSION=v0.2.3.
 # Run it again (or hanfix --update) to update.
 set -eu
 

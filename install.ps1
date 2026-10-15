@@ -1,7 +1,7 @@
 # hanfix installer for Windows:
 #   irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
 # Puts hanfix.exe in $env:HANFIX_INSTALL_DIR (default %LOCALAPPDATA%\Programs\hanfix) and adds it to
-# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.2'. Run it again (or hanfix --update) to update.
+# the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.3'. Run it again (or hanfix --update) to update.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -20,7 +20,9 @@ try {
     # GitHub serves the .sha256 as binary, so read it from a file rather than from .Content
     Invoke-WebRequest -UseBasicParsing "$base/$asset.sha256" -OutFile "$tmp.sha256"
     $want = ((Get-Content -Raw "$tmp.sha256").Trim() -split '\s+')[0]
-    $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash
+    # .NET instead of Get-FileHash, which is missing when Windows PowerShell inherits PowerShell 7's module path
+    $fs = [IO.File]::OpenRead($tmp)
+    try { $got = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($fs) | ForEach-Object { $_.ToString('X2') }) } finally { $fs.Dispose() }
     if ($want -ne $got) { throw "hanfix: checksum mismatch (expected $want, got $got)" }
     # A running hanfix.exe (hanfix --update) cannot be overwritten, but it can be renamed.
     $exe = Join-Path $dir 'hanfix.exe'

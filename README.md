@@ -39,7 +39,7 @@ irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | ie
    - Windows: `%LOCALAPPDATA%\Programs\hanfix`. 이 폴더를 사용자 PATH에 추가합니다.
 4. 셸 설정에 넣을 한 줄을 알려 줍니다.
 
-설치 폴더는 `HANFIX_INSTALL_DIR`로, 버전은 `HANFIX_VERSION=v0.2.2`처럼 바꿀 수 있습니다.
+설치 폴더는 `HANFIX_INSTALL_DIR`로, 버전은 `HANFIX_VERSION=v0.2.3`처럼 바꿀 수 있습니다.
 
 Rust가 있으면 소스에서 바로 설치할 수도 있습니다.
 
