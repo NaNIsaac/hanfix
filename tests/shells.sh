@@ -15,7 +15,10 @@ for sh in bash zsh fish; do
     # One line per second: fish discards typed-ahead input after a failed command.
     out=$(for line in "$init" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s\n' "$line"; sleep 1; done |
         HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | tr -d '\r\007' | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g; s/\x1b[()][A-Z0-9]//g')
-    if printf '%s\n' "$out" | grep -qx 'hanfix-ok' && printf '%s\n' "$out" | grep -q 'nothing to fix'; then
+    # fish keeps no history entry for the fixed command, so its second call runs the same fix again
+    if [ "$sh" = fish ]; then second='[ "$(printf "%s\n" "$out" | grep -cx hanfix-ok)" -eq 2 ]'
+    else second='printf "%s\n" "$out" | grep -q "nothing to fix"'; fi
+    if printf '%s\n' "$out" | grep -qx 'hanfix-ok' && eval "$second"; then
         echo "ok   $sh"
     else
         echo "FAIL $sh"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1
