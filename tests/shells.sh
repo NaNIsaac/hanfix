@@ -13,9 +13,8 @@ for sh in bash zsh fish; do
     esac
     home=$(mktemp -d)
     # One line per second: fish discards typed-ahead input after a failed command.
-    out=$(for line in "$init" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s
-' "$line"; sleep 1; done |
-        HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | tr -d '')
+    out=$(for line in "$init" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s\n' "$line"; sleep 1; done |
+        HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | tr -d '\r\007')
     if printf '%s\n' "$out" | grep -qx 'hanfix-ok' && printf '%s\n' "$out" | grep -q 'nothing to fix'; then
         echo "ok   $sh"
     else
