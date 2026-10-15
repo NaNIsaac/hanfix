@@ -12,12 +12,18 @@ for sh in bash zsh fish; do
         fish) init='hanfix --init fish | source'; run='fish -N -i' ;;
     esac
     home=$(mktemp -d)
-    out=$(printf '%s\nㄷ초ㅐ hanfix-ok\nhf -y\nㅗㄹ -y\nexit\n' "$init" |
-        HOME=$home timeout 20 script -qec "$run" /dev/null 2>&1 | tr -d '\r')
+    # fish drops typed input while it sets up the terminal, so its Korean alias is checked with -c below
+    second='ㅗㄹ -y'; [ "$sh" = fish ] && second='hf -y'
+    out=$(printf '%s\nㄷ초ㅐ hanfix-ok\nhf -y\n%s\nexit\n' "$init" "$second" |
+        HOME=$home timeout 20 script -qec "$run" /dev/null 2>&1 | tr -d '\r\007')
     if printf '%s\n' "$out" | grep -qx 'hanfix-ok' && printf '%s\n' "$out" | grep -q 'nothing to fix'; then
         echo "ok   $sh"
     else
         echo "FAIL $sh"; printf '%s\n' "$out" | sed 's/^/    /'; fail=1
     fi
 done
+if command -v fish >/dev/null 2>&1; then
+    if fish -N -c 'hanfix --init fish | source; functions -q ㅗㄹ'; then echo "ok   fish alias"
+    else echo "FAIL fish alias"; fail=1; fi
+fi
 exit $fail
