@@ -2,6 +2,8 @@
 
 한/영 전환을 깜빡하고 친 명령을 고쳐서 다시 실행합니다.
 
+A small CLI that fixes and re-runs shell commands typed with the Korean (2-set) keyboard layout still on, and converts text between Hangul and QWERTY keys.
+
 ![hanfix demo](assets/demo.gif)
 
 ```
