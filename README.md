@@ -226,6 +226,8 @@ pwsh tests/shells.ps1
 
 Also remove the line you added to your shell start-up file.
 
+See also: [hangeul](https://github.com/NaNIsaac/hangeul), a Python library for Hangul text.
+
 ## License
 
 MIT

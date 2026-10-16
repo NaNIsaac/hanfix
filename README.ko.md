@@ -202,6 +202,8 @@ pwsh tests/shells.ps1
 
 셸 시작 파일에 넣은 한 줄도 지우세요.
 
+함께 보기: [hangeul](https://github.com/NaNIsaac/hangeul) - 한글 텍스트 처리용 파이썬 라이브러리.
+
 ## 라이선스
 
 MIT
