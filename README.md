@@ -33,8 +33,7 @@ $ hanfix dkssudgktpdy
 
 On a Korean keyboard, forgetting to press the 한/영 key turns `ls -a` into `ㅣㄴ -ㅁ`. hanfix maps the
 Hangul back to the keys you pressed (2-set / KS X 5002 layout), shows the fixed command, and runs it when
-you press Enter. It is a single executable with no runtime, for Linux, macOS and Windows, with bash, zsh,
-fish and PowerShell.
+you press Enter. It works on Linux, macOS and Windows, with bash, zsh, fish and PowerShell.
 
 ![hanfix demo](assets/demo.gif)
 
@@ -114,7 +113,7 @@ To see the code that gets defined, run e.g. `hanfix --init bash`.
 2. Maps Hangul jamo back to English keys. If nothing changes, prints `nothing to fix` and stops.
 3. Shows the fixed command in green and waits for Enter.
 4. Adds the fixed command to shell history and runs it, so the up arrow brings it back. fish does not get
-   the history entry (fish 3 has no command to add one).
+   the history entry.
 
 `--alias` renames the function. The Korean-layout name is defined too; for example `--alias fk` defines
 `fk` and `라`.
@@ -214,10 +213,6 @@ cargo test           # composition cases, round trip of all 11,172 Hangul syllab
 sh tests/shells.sh   # in bash, zsh and fish, hf actually runs the fixed command (uses the installed hanfix)
 pwsh tests/shells.ps1
 ```
-
-- CI runs all of the above on Linux, macOS and Windows.
-- Pushing a `v*` tag uploads executables for 6 platforms to Releases: Linux, macOS, Windows × x86_64, arm64.
-- Rebuild the demo GIF with `python assets/make_demo.py` (needs Pillow).
 
 ## Uninstall
 

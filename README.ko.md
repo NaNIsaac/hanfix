@@ -1,8 +1,10 @@
 # hanfix
 
+[![ci](https://github.com/NaNIsaac/hanfix/actions/workflows/ci.yml/badge.svg)](https://github.com/NaNIsaac/hanfix/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **한/영 전환을 깜빡하고 친 명령을 고쳐서 다시 실행합니다.**
 
-[English](README.md) · 실제 실행 예시는 영문 README 첫 화면에도 있습니다.
+[English](README.md)
 
 ![hanfix demo](assets/demo.gif)
 
@@ -12,12 +14,16 @@ bash: ㅣㄴ: command not found
 $ ㅗㄹ
 ls -a  [Enter / Ctrl+C]
 .  ..  .git  README.md	src
+$ 햣 촏차ㅐㅕㅅ -ㅠ 럍-쇼ㅔㅐ
+bash: 햣: command not found
+$ ㅗㄹ
+git checkout -b fix-typo  [Enter / Ctrl+C]
+Switched to a new branch 'fix-typo'
 ```
 
 - 직전 명령을 두벌식 → QWERTY로 되돌려 보여 주고, Enter를 누르면 실행합니다.
 - 한글 자판이 켜진 채로 `hf`를 치면 `ㅗㄹ`이 됩니다. 그래서 `ㅗㄹ`도 같은 명령으로 등록합니다. 자판을 바꿀 필요가 없습니다.
 - 글자를 직접 넘겨 바꿀 수도 있습니다: `hanfix dkssudgktpdy` → `안녕하세요`.
-- 실행 파일 하나로 동작합니다. Python 같은 런타임이 필요 없습니다.
 - Linux, macOS, Windows를 지원하고, 셸은 bash, zsh, fish, PowerShell을 지원합니다.
 
 ## 설치
@@ -94,7 +100,7 @@ Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
 1. 셸 기록에서 직전 명령을 꺼냅니다. `hf` 자신은 건너뜁니다.
 2. 한글 자모를 영문 키로 되돌립니다. 바꿀 것이 없으면 `nothing to fix`를 출력하고 끝냅니다.
 3. 고친 명령을 초록색으로 보여 주고 Enter를 기다립니다.
-4. 고친 명령을 셸 기록에 추가한 뒤 실행합니다. 위 화살표로 다시 부를 수 있습니다. fish는 기록에 추가하지 않습니다(fish 3에는 기록 추가 명령이 없음).
+4. 고친 명령을 셸 기록에 추가한 뒤 실행합니다. 위 화살표로 다시 부를 수 있습니다. fish는 기록에 추가하지 않습니다.
 
 함수 이름은 `--alias`로 바꿀 수 있습니다. 한글 자판 쪽 이름도 함께 등록됩니다.
 예를 들어 `--alias fk`이면 `fk`와 `라`가 등록됩니다.
@@ -190,10 +196,6 @@ cargo test           # 조합 사례, 한글 음절 11,172자 전체의 왕복 �
 sh tests/shells.sh   # bash, zsh, fish에서 hf가 실제로 고친 명령을 실행하는지 (설치된 hanfix 사용)
 pwsh tests/shells.ps1
 ```
-
-- CI는 Linux, macOS, Windows에서 위 검사를 모두 돌립니다.
-- `v*` 태그를 push하면 6개 플랫폼용 실행 파일이 Releases에 올라갑니다: Linux·macOS·Windows × x86_64·arm64.
-- 데모 GIF는 `python assets/make_demo.py`로 다시 만듭니다. Pillow가 필요합니다.
 
 ## 삭제
 
