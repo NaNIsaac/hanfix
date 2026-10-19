@@ -6,6 +6,24 @@
 
 [English](README.md)
 
+## 빠른 설치
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+```
+
+**Linux / macOS**
+
+```sh
+curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
+```
+
+설치 후 [셸 설정](#셸-설정)에 따라 `hf`를 등록하고 터미널을 다시 열어야 합니다. 스크립트는 릴리스 실행 파일을 다운로드하고 SHA-256 체크섬을 검증합니다. 원격 스크립트를 실행하기 전에 [설치 스크립트](https://github.com/NaNIsaac/hanfix/tree/main)를 확인할 수 있습니다. Cargo 설치나 직접 다운로드는 [설치](#설치)를 참고하세요.
+
+
+
 ![hanfix demo](assets/demo.gif)
 
 ```console
