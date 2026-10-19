@@ -6,6 +6,24 @@
 
 [한국어](README.ko.md)
 
+## Quick install
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+```
+
+**Linux / macOS**
+
+```sh
+curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
+```
+
+Then enable `hf` in your shell (see [Shell setup](#shell-setup)); reopen the terminal before trying `hf`. The scripts download a release binary and verify its SHA-256 checksum. You can [inspect the installers](https://github.com/NaNIsaac/hanfix/tree/main) before running remote code. For Cargo or manual downloads, see [Install](#install).
+
+
+
 ```console
 $ ㅣㄴ -ㅁ
 bash: ㅣㄴ: command not found
