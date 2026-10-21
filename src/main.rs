@@ -185,7 +185,9 @@ alias __KO__ __HF__
 // hanfix's UTF-8 output with the UTF-8 decoder switched on.
 const POWERSHELL: &str = r#"function global:__HF__ {
     param([Alias('y')][switch]$Yes)
+    # Codigest's capture hook hands the engine `. __cdg { <line> }`, and history keeps that form.
     $last = Get-History | Select-Object -Last 3 | ForEach-Object CommandLine |
+        ForEach-Object { $_ -replace '^\. __cdg \{ ([\s\S]*?)(?: |\n)\}$', '$1' } |
         Where-Object { $_ -notmatch '^\s*(__HF__|__KO_RE__)(\s|$)' } | Select-Object -Last 1
     if (-not $last) { Write-Host 'hanfix: no previous command'; return }
     $enc = [Console]::OutputEncoding
