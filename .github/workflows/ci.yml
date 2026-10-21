@@ -35,4 +35,4 @@ jobs:
           sh tests/shells.sh
 
   readme:
-    uses: NaNIsaac/.github/.github/workflows/readme.yml@feat/readme-setup-test
+    uses: NaNIsaac/.github/.github/workflows/readme.yml@main
