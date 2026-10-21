@@ -1,0 +1,29 @@
+name: termux
+# Termux has bionic libc and a $PREFIX layout (no /bin/sh); termux-docker has no Android runtime.
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "tests/**", "Cargo.*", "install.sh", ".github/workflows/termux.yml"]
+  pull_request:
+    paths: ["src/**", "tests/**", "Cargo.*", "install.sh", ".github/workflows/termux.yml"]
+  workflow_dispatch:
+
+jobs:
+  termux:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      # aarch64 termux-docker needs --privileged (or an unconfined seccomp profile).
+      - run: |
+          docker run --rm --privileged -v "$PWD:/src:ro" termux/termux-docker:aarch64 bash -euc '
+            yes | pkg upgrade -y >/dev/null
+            pkg install -y rust git bash zsh fish util-linux >/dev/null
+            cp -r /src "$HOME/x"
+            cd "$HOME/x"
+            cargo test --release --locked
+            cargo install --path . --locked
+            export PATH="$HOME/.cargo/bin:$PREFIX/bin:$PATH"
+            sh tests/shells.sh
+            HANFIX_INSTALL_DIR="$HOME/h" sh install.sh
+            "$HOME/h/hanfix" ㅣㄴ -ㅁ
+          '
