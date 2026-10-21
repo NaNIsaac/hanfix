@@ -267,9 +267,9 @@ sh tests/shells.sh   # in bash, zsh and fish, hf actually runs the fixed command
 pwsh tests/shells.ps1
 ```
 
-The setup steps under Quick install are tested too. A `<!-- test -->` comment before a code block marks it, and
-`pwsh tests/readme.ps1` runs the marked blocks in order on a clean machine. It installs the latest release and edits
-your shell start-up file, so it only runs on CI (or with `-Force`); `-DryRun` lists the steps.
+The setup steps under Quick install are tested too. A `<!-- test -->` comment before a code block marks it, and CI runs
+the marked blocks in order on clean Linux, macOS and Windows machines with the shared
+[readme workflow](https://github.com/NaNIsaac/.github/blob/main/.github/workflows/readme.yml).
 
 ## Uninstall
 

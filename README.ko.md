@@ -259,9 +259,9 @@ sh tests/shells.sh   # bash, zsh, fish에서 hf가 실제로 고친 명령을 �
 pwsh tests/shells.ps1
 ```
 
-빠른 설치의 세팅 단계도 테스트합니다. 코드 블록 앞의 `<!-- test -->` 주석이 대상을 표시하고,
-`pwsh tests/readme.ps1`이 표시된 블록을 깨끗한 환경에서 순서대로 실행합니다. 최신 릴리스를 설치하고 셸 시작 파일을
-고치므로 CI(또는 `-Force`)에서만 실행되고, `-DryRun`은 단계 목록만 보여 줍니다.
+빠른 설치의 세팅 단계도 테스트합니다. 코드 블록 앞의 `<!-- test -->` 주석이 대상을 표시하고, CI가 공통
+[readme workflow](https://github.com/NaNIsaac/.github/blob/main/.github/workflows/readme.yml)로 표시된 블록을
+깨끗한 Linux, macOS, Windows에서 순서대로 실행합니다.
 
 ## 삭제
 
