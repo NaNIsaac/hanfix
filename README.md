@@ -79,6 +79,8 @@ The install script:
 
 Set `HANFIX_INSTALL_DIR` to change the install folder, and `HANFIX_VERSION=v0.2.3` to pick a version.
 
+Termux (aarch64) is tested in CI.
+
 With Rust, you can install from source:
 
 ```sh

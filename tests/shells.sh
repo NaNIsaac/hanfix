@@ -4,7 +4,7 @@
 set -u
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 fail=0
-esc=$(printf '')
+esc=$(printf '\033')
 for sh in bash zsh fish; do
     command -v "$sh" >/dev/null 2>&1 || { echo "skip $sh (not installed)"; continue; }
     case $sh in
