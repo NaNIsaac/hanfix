@@ -35,15 +35,4 @@ jobs:
           sh tests/shells.sh
 
   readme:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: README setup steps
-        shell: pwsh
-        run: |
-          ./tests/readme.ps1
-          ./tests/readme.ps1 -Readme README.ko.md
+    uses: NaNIsaac/.github/.github/workflows/readme.yml@feat/readme-setup-test
