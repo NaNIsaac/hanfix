@@ -32,7 +32,7 @@ curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.s
 
 <!-- test windows -->
 ```powershell
-Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null; Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
 ```
 
 **bash**
@@ -149,7 +149,7 @@ start-up file and open a new terminal.
 In PowerShell, run this once:
 
 ```powershell
-Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null; Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
 ```
 
 To see the code that gets defined, run e.g. `hanfix --init bash`.
