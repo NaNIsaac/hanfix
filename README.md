@@ -8,21 +8,65 @@
 
 ## Quick install
 
+**1. Install the latest release**
+
 **Windows (PowerShell)**
 
+<!-- test windows -->
 ```powershell
 irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
 ```
 
 **Linux / macOS**
 
+<!-- test unix -->
 ```sh
 curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
 ```
 
-Then enable `hf` in your shell (see [Shell setup](#shell-setup)); reopen the terminal before trying `hf`. The scripts download a release binary and verify its SHA-256 checksum. You can [inspect the installers](https://github.com/NaNIsaac/hanfix/tree/main) before running remote code. For Cargo or manual downloads, see [Install](#install).
+**2. Enable `hf` in your shell**
 
+`hf` is a shell function, because only the shell knows the previous command, so it needs one line in your shell's start-up file. Run this once.
 
+**PowerShell**
+
+<!-- test windows -->
+```powershell
+Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+```
+
+**bash**
+
+<!-- test unix -->
+```sh
+echo 'eval "$(hanfix --init bash)"' >> ~/.bashrc
+```
+
+For zsh (the macOS default) and fish, see [Shell setup](#shell-setup).
+
+**3. Open a new terminal and check that `hf` exists**
+
+<!-- test windows -->
+```powershell
+Get-Command hf
+```
+
+<!-- test unix -->
+```sh
+bash -ic 'type hf'
+```
+
+Try the conversion on its own. It only prints:
+
+<!-- test console -->
+```console
+$ hanfix ㅣㄴ -ㅁ
+ls -a
+$ hanfix dkssudgktpdy
+안녕하세요
+```
+
+The scripts download a release binary and verify its SHA-256 checksum. You can [inspect the installers](https://github.com/NaNIsaac/hanfix/tree/main) before running remote code. For Cargo or manual downloads, see [Install](#install).
 
 ```console
 $ ㅣㄴ -ㅁ
@@ -39,15 +83,6 @@ Switched to a new branch 'fix-typo'
 
 `ㅗㄹ` is what `hf` becomes when the Korean layout is still on, so both names work and you never have to
 switch layouts to fix the mistake.
-
-Try the conversion on its own. It only prints:
-
-```console
-$ hanfix ㅣㄴ -ㅁ
-ls -a
-$ hanfix dkssudgktpdy
-안녕하세요
-```
 
 On a Korean keyboard, forgetting to press the 한/영 key turns `ls -a` into `ㅣㄴ -ㅁ`. hanfix maps the
 Hangul back to the keys you pressed (2-set / KS X 5002 layout), shows the fixed command, and runs it when
@@ -231,6 +266,10 @@ cargo test           # composition cases, round trip of all 11,172 Hangul syllab
 sh tests/shells.sh   # in bash, zsh and fish, hf actually runs the fixed command (uses the installed hanfix)
 pwsh tests/shells.ps1
 ```
+
+The setup steps under Quick install are tested too. A `<!-- test -->` comment before a code block marks it, and
+`pwsh tests/readme.ps1` runs the marked blocks in order on a clean machine. It installs the latest release and edits
+your shell start-up file, so it only runs on CI (or with `-Force`); `-DryRun` lists the steps.
 
 ## Uninstall
 
