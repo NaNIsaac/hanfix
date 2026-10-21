@@ -32,7 +32,7 @@ curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.s
 
 <!-- test windows -->
 ```powershell
-Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null; Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
 ```
 
 **bash**
@@ -144,7 +144,7 @@ hanfix --update
 PowerShell에서는 이렇게 한 번 실행하면 됩니다.
 
 ```powershell
-Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null; Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
 ```
 
 실제로 등록되는 코드는 `hanfix --init bash`처럼 실행해서 볼 수 있습니다.

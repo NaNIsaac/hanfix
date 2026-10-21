@@ -44,4 +44,4 @@ if (($env:Path -split ';') -notcontains $dir) { $env:Path += ";$dir" }
 Write-Host "hanfix: installed $(& (Join-Path $dir 'hanfix.exe') --version) to $dir"
 if ($env:HANFIX_UPDATE) { return }
 Write-Host 'hanfix: to fix the previous command with hf, run this once and open a new terminal:'
-Write-Host "    Add-Content `$PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'"
+Write-Host "    New-Item -ItemType Directory -Force (Split-Path `$PROFILE) | Out-Null; Add-Content `$PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'"
