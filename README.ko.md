@@ -8,21 +8,65 @@
 
 ## 빠른 설치
 
+**1. 최신 릴리스 설치**
+
 **Windows (PowerShell)**
 
+<!-- test windows -->
 ```powershell
 irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
 ```
 
 **Linux / macOS**
 
+<!-- test unix -->
 ```sh
 curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
 ```
 
-설치 후 [셸 설정](#셸-설정)에 따라 `hf`를 등록하고 터미널을 다시 열어야 합니다. 스크립트는 릴리스 실행 파일을 다운로드하고 SHA-256 체크섬을 검증합니다. 원격 스크립트를 실행하기 전에 [설치 스크립트](https://github.com/NaNIsaac/hanfix/tree/main)를 확인할 수 있습니다. Cargo 설치나 직접 다운로드는 [설치](#설치)를 참고하세요.
+**2. 셸에 `hf` 등록**
 
+`hf`는 셸 함수입니다. 직전 명령은 셸만 알기 때문에 셸 시작 파일에 한 줄이 필요합니다. 한 번만 실행하세요.
 
+**PowerShell**
+
+<!-- test windows -->
+```powershell
+Add-Content $PROFILE 'Invoke-Expression (hanfix --init powershell | Out-String)'
+```
+
+**bash**
+
+<!-- test unix -->
+```sh
+echo 'eval "$(hanfix --init bash)"' >> ~/.bashrc
+```
+
+zsh(macOS 기본 셸)와 fish는 [셸 설정](#셸-설정)을 참고하세요.
+
+**3. 새 터미널을 열어 `hf`가 등록됐는지 확인**
+
+<!-- test windows -->
+```powershell
+Get-Command hf
+```
+
+<!-- test unix -->
+```sh
+bash -ic 'type hf'
+```
+
+변환만 해 볼 수도 있습니다. 결과를 출력만 하고 실행하지 않습니다.
+
+<!-- test console -->
+```console
+$ hanfix ㅣㄴ -ㅁ
+ls -a
+$ hanfix dkssudgktpdy
+안녕하세요
+```
+
+스크립트는 릴리스 실행 파일을 다운로드하고 SHA-256 체크섬을 검증합니다. 원격 스크립트를 실행하기 전에 [설치 스크립트](https://github.com/NaNIsaac/hanfix/tree/main)를 확인할 수 있습니다. Cargo 설치나 직접 다운로드는 [설치](#설치)를 참고하세요.
 
 ![hanfix demo](assets/demo.gif)
 
@@ -216,6 +260,10 @@ cargo test           # 조합 사례, 한글 음절 11,172자 전체의 왕복 �
 sh tests/shells.sh   # bash, zsh, fish에서 hf가 실제로 고친 명령을 실행하는지 (설치된 hanfix 사용)
 pwsh tests/shells.ps1
 ```
+
+빠른 설치의 세팅 단계도 테스트합니다. 코드 블록 앞의 `<!-- test -->` 주석이 대상을 표시하고,
+`pwsh tests/readme.ps1`이 표시된 블록을 깨끗한 환경에서 순서대로 실행합니다. 최신 릴리스를 설치하고 셸 시작 파일을
+고치므로 CI(또는 `-Force`)에서만 실행되고, `-DryRun`은 단계 목록만 보여 줍니다.
 
 ## 삭제
 
