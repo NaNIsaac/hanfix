@@ -35,4 +35,4 @@ jobs:
           sh tests/shells.sh
 
   readme:
-    uses: NaNIsaac/.github/.github/workflows/readme.yml@main
+    uses: NaNIsaac/.github/.github/workflows/readme.yml@ci/readme-skip-macos-private
