@@ -5,6 +5,13 @@
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
+# tests/install-path.ps1 extracts this function by name, so keep it free of side effects.
+# [string] turns the $null that GetEnvironmentVariable returns for an unset Path into ''.
+function Merge-PathEntry([string]$Path, [string]$Dir) {
+    if (($Path -split ';') -contains $Dir) { return $Path }
+    ($Path.TrimEnd(';') + ";$Dir").TrimStart(';')
+}
+
 $repo = 'NaNIsaac/hanfix'
 $dir = if ($env:HANFIX_INSTALL_DIR) { $env:HANFIX_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\hanfix' }
 $version = if ($env:HANFIX_VERSION) { $env:HANFIX_VERSION } else { 'latest' }
@@ -35,8 +42,9 @@ try {
 }
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (($userPath -split ';') -notcontains $dir) {
-    [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ";$dir").TrimStart(';'), 'User')
+$merged = Merge-PathEntry $userPath $dir
+if ($merged -ne $userPath) {
+    [Environment]::SetEnvironmentVariable('Path', $merged, 'User')
     Write-Host "hanfix: added $dir to your user PATH"
 }
 if (($env:Path -split ';') -notcontains $dir) { $env:Path += ";$dir" }

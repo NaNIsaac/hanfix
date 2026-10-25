@@ -18,6 +18,9 @@ jobs:
       - name: PowerShell integration
         shell: pwsh
         run: ./tests/shells.ps1
+      - name: installer PATH merge
+        shell: pwsh
+        run: ./tests/install-path.ps1
       - name: installer (latest release)
         shell: bash
         run: |
