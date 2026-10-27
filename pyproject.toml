@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "hanfix"
+dynamic = ["version"]
+description = "Fix commands and text typed in the wrong keyboard layout (Korean 2-set <-> QWERTY)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Isaac Yong" }]
+keywords = ["korean", "hangul", "keyboard", "cli", "shell"]
+classifiers = [
+    "Environment :: Console",
+    "Natural Language :: Korean",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Rust",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Repository = "https://github.com/NaNIsaac/hanfix"
+
+# The wheel holds only the hanfix executable, installed into the environment's scripts directory
+[tool.maturin]
+bindings = "bin"
