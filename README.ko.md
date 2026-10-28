@@ -166,6 +166,10 @@ New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null; Add-Conten
 3. 고친 명령을 초록색으로 보여 주고 Enter를 기다립니다.
 4. 고친 명령을 셸 기록에 추가한 뒤 실행합니다. 위 화살표로 다시 부를 수 있습니다. fish는 기록에 추가하지 않습니다.
 
+[codigest](https://github.com/NaNIsaac/codigest)의 터미널 기록이 켜져 있어도(bash, zsh, PowerShell) 고친
+명령은 터미널을 그대로 씁니다. 편집기나 `codex`도 평소처럼 열리고, codigest는 그 명령을 직접 입력한 것과
+같은 규칙으로 기록합니다.
+
 함수 이름은 `--alias`로 바꿀 수 있습니다. 한글 자판 쪽 이름도 함께 등록됩니다.
 예를 들어 `--alias fk`이면 `fk`와 `라`가 등록됩니다.
 

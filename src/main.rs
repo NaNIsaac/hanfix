@@ -138,6 +138,10 @@ fn fix(text: &str, to: Option<Dir>) -> String {
 // alias __KO__: what typing the name gives when the Korean layout is still on (hf -> ㅗㄹ).
 // The previous command is the last history entry that is not a call of the function itself, so it
 // works whether or not the shell has already recorded the current line.
+// codigest's terminal capture would run the function with its output piped, and the fixed command
+// (an editor, `codex`) would lose the terminal. The names go into CODIGEST_RUNNERS, which that hook
+// does not capture, and the fixed command goes to its __cdg_run, looked up at call time so the load
+// order does not matter; it applies the hook's own rules to that line.
 const SHELLS: [&str; 4] = ["bash", "zsh", "fish", "powershell"];
 
 const BASH: &str = r#"__HF__() {
@@ -150,9 +154,10 @@ const BASH: &str = r#"__HF__() {
         printf '\033[32m%s\033[0m  [Enter / Ctrl+C] ' "$fixed"; read -r _ || return 130
     fi
     __HIST__ "$fixed"
-    eval "$fixed"
+    if type __cdg_run >/dev/null 2>&1; then __cdg_run "$fixed"; else eval "$fixed"; fi
 }
 alias __KO__=__HF__
+CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} __HF__ __KO__"
 "#;
 
 const FISH: &str = r#"function __HF__ --description 'hanfix: fix and re-run the previous command'
@@ -201,9 +206,11 @@ const POWERSHELL: &str = r#"function global:__HF__ {
         $null = [Console]::ReadLine()
     }
     try { [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($fixed) } catch {}
-    Invoke-Expression $fixed
+    if (Get-Command __cdg_run -CommandType Function -ErrorAction Ignore) { . __cdg_run $fixed }
+    else { Invoke-Expression $fixed }
 }
 Set-Alias -Name (__KO_PS__) -Value __HF__ -Scope Global
+$global:CODIGEST_RUNNERS += '__HF__', (__KO_PS__)
 "#;
 
 fn init_script(shell: &str, name: &str) -> String {
@@ -434,5 +441,8 @@ mod tests {
         assert!(init_script("zsh", "fk").contains("alias 라=fk"));
         let ps = init_script("powershell", "hf");
         assert!(ps.is_ascii() && ps.contains("[char]0x3157 + [string][char]0x3139"));
+        assert!(init_script("bash", "hf").contains(r#"CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} hf ㅗㄹ""#));
+        assert!(ps.contains("$global:CODIGEST_RUNNERS += 'hf', ([string][char]0x3157"));
+        assert!(!init_script("fish", "hf").contains("CODIGEST"));
     }
 }
