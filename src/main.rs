@@ -157,7 +157,7 @@ const BASH: &str = r#"__HF__() {
     if type __cdg_run >/dev/null 2>&1; then __cdg_run "$fixed"; else eval "$fixed"; fi
 }
 alias __KO__=__HF__
-CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} __HF__ __KO__"
+case " ${CODIGEST_RUNNERS-} " in *" __HF__ "*) ;; *) CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} __HF__ __KO__" ;; esac
 "#;
 
 const FISH: &str = r#"function __HF__ --description 'hanfix: fix and re-run the previous command'
@@ -189,8 +189,10 @@ alias __KO__ __HF__
 // so the script itself stays ASCII (the Korean alias is built from code points) and the function reads
 // hanfix's UTF-8 output with the UTF-8 decoder switched on.
 const POWERSHELL: &str = r#"function global:__HF__ {
+    # Advanced, so a failed command can set the caller's $? (below).
+    [CmdletBinding()]
     param([Alias('y')][switch]$Yes)
-    # Codigest's capture hook hands the engine `. __cdg { <line> }`, and history keeps that form.
+    # Codigest's capture hook up to 0.12.2 leaves `. __cdg { <line> }` in history.
     $last = Get-History | Select-Object -Last 3 | ForEach-Object CommandLine |
         ForEach-Object { $_ -replace '^\. __cdg \{ ([\s\S]*?)(?: |\n)\}$', '$1' } |
         Where-Object { $_ -notmatch '^\s*(__HF__|__KO_RE__)(\s|$)' } | Select-Object -Last 1
@@ -206,11 +208,24 @@ const POWERSHELL: &str = r#"function global:__HF__ {
         $null = [Console]::ReadLine()
     }
     try { [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($fixed) } catch {}
+    # The function returns normally whatever the command did, so $? would always be True. A native
+    # command stores a new boxed exit code, and an error shown on screen is a new $Error[0]: either one
+    # means the command failed, as $? would say had it been typed.
+    $prevExit = $global:LASTEXITCODE
+    $prevErr = $global:Error[0]
     if (Get-Command __cdg_run -CommandType Function -ErrorAction Ignore) { . __cdg_run $fixed }
     else { Invoke-Expression $fixed }
+    if (($global:LASTEXITCODE -and -not [object]::ReferenceEquals($global:LASTEXITCODE, $prevExit)) -or
+        -not [object]::ReferenceEquals($global:Error[0], $prevErr)) {
+        # Sets $? to false without printing anything or adding to $Error.
+        $ErrorActionPreference = 'Ignore'
+        $PSCmdlet.WriteError([Management.Automation.ErrorRecord]::new(
+            [Exception]::new('hanfix: the command failed'), 'HanfixFailed', 'NotSpecified', $null))
+    }
 }
 Set-Alias -Name (__KO_PS__) -Value __HF__ -Scope Global
-$global:CODIGEST_RUNNERS += '__HF__', (__KO_PS__)
+# Only once, so sourcing the setup again (`. $PROFILE`) does not list the names twice.
+if ('__HF__' -notin $global:CODIGEST_RUNNERS) { $global:CODIGEST_RUNNERS += '__HF__', (__KO_PS__) }
 "#;
 
 fn init_script(shell: &str, name: &str) -> String {
@@ -441,8 +456,9 @@ mod tests {
         assert!(init_script("zsh", "fk").contains("alias 라=fk"));
         let ps = init_script("powershell", "hf");
         assert!(ps.is_ascii() && ps.contains("[char]0x3157 + [string][char]0x3139"));
-        assert!(init_script("bash", "hf").contains(r#"CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} hf ㅗㄹ""#));
-        assert!(ps.contains("$global:CODIGEST_RUNNERS += 'hf', ([string][char]0x3157"));
+        assert!(init_script("bash", "hf").contains(r#"*" hf "*) ;; *) CODIGEST_RUNNERS="${CODIGEST_RUNNERS-} hf ㅗㄹ""#));
+        assert!(ps.contains("if ('hf' -notin $global:CODIGEST_RUNNERS) { $global:CODIGEST_RUNNERS += 'hf', ([string][char]0x3157"));
+        assert!(ps.contains("[CmdletBinding()]") && ps.contains("$PSCmdlet.WriteError"));
         assert!(!init_script("fish", "hf").contains("CODIGEST"));
     }
 }
