@@ -17,7 +17,8 @@ for sh in bash zsh fish; do
     cdg=
     [ "$sh" = fish ] || cdg='__cdg_run() { echo "cdg_run:$1"; eval "$1"; }; echo "runners:$CODIGEST_RUNNERS"'
     # One line per second: fish discards typed-ahead input after a failed command.
-    out=$(for line in "$init" "$cdg" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s\n' "$line"; sleep 1; done |
+    # The setup is sourced twice: the runner names must still be listed once.
+    out=$(for line in "$init" "$init" "$cdg" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s\n' "$line"; sleep 1; done |
         HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | tr -d '\r\007' | sed "s/$esc[]P][^$esc]*$esc[\\]//g; s/$esc\[[0-9;?>]*[A-Za-z]//g; s/$esc[()][A-Z0-9]//g; s/$esc[=>]//g")
     # fish keeps no history entry for the fixed command, so its second call runs the same fix again
     if [ "$sh" = fish ]; then second='[ "$(printf "%s\n" "$out" | grep -cx hanfix-ok)" -eq 2 ]'
