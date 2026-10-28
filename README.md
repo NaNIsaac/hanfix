@@ -170,6 +170,10 @@ To see the code that gets defined, run e.g. `hanfix --init bash`.
 4. Adds the fixed command to shell history and runs it, so the up arrow brings it back. fish does not get
    the history entry.
 
+With [codigest](https://github.com/NaNIsaac/codigest)'s terminal capture on (bash, zsh, PowerShell), the
+fixed command still gets the terminal, so an editor or `codex` opens as usual; codigest captures it by
+its own rules, as if you had typed it.
+
 `--alias` renames the function. The Korean-layout name is defined too; for example `--alias fk` defines
 `fk` and `라`.
 
