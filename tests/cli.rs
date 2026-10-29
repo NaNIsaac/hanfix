@@ -55,6 +55,18 @@ fn decode_failure_writes_nothing_to_stdout() {
 }
 
 #[test]
+fn replacement_character_in_the_result_fails() {
+    for (kind, text) in [("percent", "%EC%95%88%EF%BF%BD"), ("underscore-hex", "_EF_BF_BD")] {
+        let out = hanfix(&["decode", "--type", kind, text], None);
+        assert_eq!(out.status.code(), Some(1), "{text}");
+        assert!(out.stdout.is_empty(), "{text}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.contains("lossy: the decoded text contains U+FFFD"), "{text}: {err}");
+    }
+    assert!(stdout(&["inspect", "%EC%95%88%EF%BF%BD"]).contains("Status: invalid\nEncoding: UTF-8\nReason: lossy: "));
+}
+
+#[test]
 fn inspect_never_fails() {
     for text in ["hello_world", "100% done", "_ED_8A", "%GG", "트리"] {
         let out = stdout(&["inspect", text]);
@@ -113,6 +125,7 @@ fn mojibake() {
         ("ì•ˆ\u{FFFD}", "lossy: U+FFFD at character 3"),
         ("안녕 ì•ˆë…•", "'안' (U+C548) at character 0 is not in windows-1252"),
         ("ì•ˆë…", "incomplete UTF-8 sequence at character 3"),
+        ("ì•ˆë…•ï¿½", "lossy: the decoded text contains U+FFFD at character 2"),
     ] {
         let out = hanfix(&with(&w, text), None);
         assert_eq!(out.status.code(), Some(1), "{text}");
@@ -124,7 +137,10 @@ fn mojibake() {
     assert!(report.starts_with("Detected: mojibake\nStatus: valid\nEncoding: UTF-8 read as windows-1252\n"), "{report}");
     assert!(report.ends_with("Candidate: 안녕\n"), "{report}");
     assert!(stdout(&["inspect", "ì•ˆ\u{FFFD}"]).contains("Status: invalid\nEncoding: UTF-8 read as windows-1252\nReason: lossy: "));
-    for text in ["안녕하세요", "hello world", "café"] {
+    let report = stdout(&["inspect", "ì•ˆë…•ï¿½"]);
+    assert!(report.contains("Status: invalid\nEncoding: UTF-8 read as windows-1252\nReason: lossy: "), "{report}");
+    assert!(!report.contains("Candidate") && !report.contains("twice"), "{report}");
+    for text in ["안녕하세요", "hello world", "café", "café’s", "résumé…", "„Café“", "«Café»"] {
         assert!(stdout(&["inspect", text]).starts_with("Detected: none\n"), "{text}");
     }
     for args in [

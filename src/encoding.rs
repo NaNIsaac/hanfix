@@ -2,7 +2,8 @@
 //!
 //! Only escape runs change; every other character is copied as it is. A run of escapes is one byte
 //! sequence that must be complete, valid UTF-8, or the whole decode fails: nothing is replaced with
-//! U+FFFD and nothing is guessed.
+//! U+FFFD and nothing is guessed. A result that contains U+FFFD fails too, since an escaped `EF BF BD`
+//! means the text was damaged before it was escaped.
 
 use std::fmt;
 
@@ -47,25 +48,38 @@ impl Kind {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct DecodeError {
-    pub kind: Kind,
-    /// The escape run that failed, as written in the input.
-    pub run: String,
-    /// Characters before the run.
-    pub at: usize,
-    pub incomplete: bool,
+pub enum DecodeError {
+    Run {
+        kind: Kind,
+        /// The escape run that failed, as written in the input.
+        run: String,
+        /// Characters before the run.
+        at: usize,
+        incomplete: bool,
+    },
+    /// The decoded text has U+FFFD at character `at`: the bytes were damaged before they were escaped,
+    /// so the result is not the original. `bytes` as in `Decoded`.
+    Lossy { at: usize, bytes: usize },
 }
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let what = if self.incomplete { "incomplete UTF-8 sequence" } else { "invalid UTF-8" };
-        // A run can be megabytes long on standard input; the start and the length locate it.
-        let run = if self.run.len() > 40 {
-            format!("{}...' ({} characters)", &self.run[..40], self.run.len())
-        } else {
-            format!("{}'", self.run)
-        };
-        write!(f, "{what} in {} escape '{run} at character {}", self.kind.name(), self.at)
+        match self {
+            DecodeError::Run { kind, run, at, incomplete } => {
+                let what = if *incomplete { "incomplete UTF-8 sequence" } else { "invalid UTF-8" };
+                // A run can be megabytes long on standard input; the start and the length locate it.
+                let run = if run.len() > 40 {
+                    format!("{}...' ({} characters)", &run[..40], run.len())
+                } else {
+                    format!("{run}'")
+                };
+                write!(f, "{what} in {} escape '{run} at character {at}", kind.name())
+            }
+            DecodeError::Lossy { at, .. } => write!(
+                f,
+                "lossy: the decoded text contains U+FFFD at character {at}: it was already damaged before it was escaped"
+            ),
+        }
     }
 }
 
@@ -127,7 +141,7 @@ pub fn decode(kind: Kind, text: &str) -> Result<Decoded, DecodeError> {
         match std::str::from_utf8(&run) {
             Ok(s) => out.push_str(s),
             Err(e) => {
-                return Err(DecodeError {
+                return Err(DecodeError::Run {
                     kind,
                     run: text[start..i].to_string(),
                     at: text[..start].chars().count(),
@@ -138,6 +152,9 @@ pub fn decode(kind: Kind, text: &str) -> Result<Decoded, DecodeError> {
         copied = i;
     }
     out.push_str(&text[copied..]);
+    if let Some(at) = out.chars().position(|c| c == '\u{FFFD}') {
+        return Err(DecodeError::Lossy { at, bytes });
+    }
     Ok(Decoded { text: out, bytes })
 }
 
@@ -177,7 +194,7 @@ pub fn inspect(text: &str) -> Vec<Candidate> {
     let mut found: Vec<(&'static str, String, mojibake::Outcome)> = Vec::new();
     for kind in KINDS {
         match decode(kind, text) {
-            Ok(d) if d.bytes == 0 => {}
+            Ok(Decoded { bytes: 0, .. }) | Err(DecodeError::Lossy { bytes: 0, .. }) => {}
             Ok(d) => found.push((
                 kind.name(),
                 "UTF-8".into(),
@@ -290,20 +307,23 @@ mod tests {
         assert_eq!(ok(Kind::Percent, "%GG"), "%GG");
     }
 
+    /// The failed run, its position and whether it was incomplete.
+    fn run_error(kind: Kind, text: &str) -> (String, usize, bool) {
+        match decode(kind, text) {
+            Err(DecodeError::Run { run, at, incomplete, .. }) => (run, at, incomplete),
+            r => panic!("{text}: {r:?}"),
+        }
+    }
+
     #[test]
     fn bad_sequences_fail() {
-        let e = decode(Kind::UnderscoreHex, "_ED_8A").unwrap_err();
-        assert!(e.incomplete && e.run == "_ED_8A" && e.at == 0);
-        let e = decode(Kind::Percent, "x%ED%8A").unwrap_err();
-        assert!(e.incomplete && e.run == "%ED%8A" && e.at == 1);
-        let e = decode(Kind::Percent, "%FF").unwrap_err();
-        assert!(!e.incomplete);
+        assert_eq!(run_error(Kind::UnderscoreHex, "_ED_8A"), ("_ED_8A".into(), 0, true));
+        assert_eq!(run_error(Kind::Percent, "x%ED%8A"), ("%ED%8A".into(), 1, true));
+        assert_eq!(run_error(Kind::Percent, "%FF"), ("%FF".into(), 0, false));
         // A lead byte with what follows it missing still fails, also before plain text.
-        let e = decode(Kind::UnderscoreHex, "트리_DB_backup.sql").unwrap_err();
-        assert!(e.incomplete && e.run == "_DB" && e.at == 2);
+        assert_eq!(run_error(Kind::UnderscoreHex, "트리_DB_backup.sql"), ("_DB".into(), 2, true));
         // Inside a character every escape is taken, so a wrong one is reported, not kept as text.
-        let e = decode(Kind::UnderscoreHex, "_ED_C3_A9").unwrap_err();
-        assert!(!e.incomplete && e.run == "_ED_C3_A9");
+        assert_eq!(run_error(Kind::UnderscoreHex, "_ED_C3_A9"), ("_ED_C3_A9".into(), 0, false));
         assert!(decode(Kind::UnderscoreHex, "_ED_A0_80").is_err());
         // A good run does not save a later bad one.
         assert!(decode(Kind::UnderscoreHex, "_ED_8A_B8 _ED").is_err());
@@ -317,6 +337,29 @@ mod tests {
             "incomplete UTF-8 sequence in underscore-hex escape '_ED_8A_B8_ED_8A_B8_ED_8A_B8_ED_8A_B8_ED_...' \
              (9003 characters) at character 0"
         );
+    }
+
+    #[test]
+    fn replacement_character_in_the_result_fails() {
+        // EF BF BD is U+FFFD: the bytes were already damaged when they were escaped.
+        for (kind, text, at) in [
+            (Kind::Percent, "%EF%BF%BD", 0),
+            (Kind::Percent, "%EC%95%88%EF%BF%BD", 1),
+            (Kind::UnderscoreHex, "_EF_BF_BD", 0),
+            (Kind::UnderscoreHex, "x_EC_95_88_EF_BF_BD.txt", 2),
+            (Kind::Percent, "a\u{FFFD} %41", 1),
+        ] {
+            assert!(matches!(decode(kind, text), Err(DecodeError::Lossy { at: a, .. }) if a == at), "{text}");
+        }
+        assert_eq!(decode(Kind::Percent, "\u{FFFD}"), Err(DecodeError::Lossy { at: 0, bytes: 0 }));
+        assert_eq!(
+            decode(Kind::Percent, "%EF%BF%BD").unwrap_err().to_string(),
+            "lossy: the decoded text contains U+FFFD at character 0: it was already damaged before it was escaped"
+        );
+        let c = inspect("%EC%95%88%EF%BF%BD");
+        assert!(c.len() == 1 && c[0].status == Status::Invalid && c[0].reason.starts_with("lossy: "));
+        // Plain text with U+FFFD and no escapes is not an escape candidate.
+        assert!(inspect("a\u{FFFD}b").is_empty());
     }
 
     #[test]

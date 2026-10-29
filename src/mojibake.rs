@@ -2,8 +2,9 @@
 //!
 //! Recovery runs the misreading backwards: every character goes back to its byte in the code page,
 //! and the bytes are read as UTF-8. Both steps are strict. A character the code page does not have,
-//! or bytes that are not UTF-8, fail the whole text; U+FFFD means a byte was already replaced, and
-//! nothing can say which one, so such text is never reported as recovered.
+//! or bytes that are not UTF-8, fail the whole text; U+FFFD, in the text or in the result, means a
+//! byte was already replaced, and nothing can say which one, so such text is never reported as
+//! recovered.
 
 use std::fmt;
 
@@ -59,6 +60,9 @@ impl Codepage {
 pub enum Error {
     /// U+FFFD at this character.
     Lossy(usize),
+    /// U+FFFD at this character of the result (`ï¿½` is its three bytes): the text was damaged before
+    /// it was misread.
+    Damaged(usize),
     NotInCodepage { codepage: Codepage, c: char, at: usize },
     /// The bytes are not UTF-8 from this character on (one byte per character, so the byte offset).
     NotUtf8 { at: usize, incomplete: bool },
@@ -70,6 +74,10 @@ impl fmt::Display for Error {
             Error::Lossy(at) => write!(
                 f,
                 "lossy: U+FFFD at character {at} means a byte was already replaced; the original cannot be recovered"
+            ),
+            Error::Damaged(at) => write!(
+                f,
+                "lossy: the decoded text contains U+FFFD at character {at}: it was already damaged before it was misread"
             ),
             Error::NotInCodepage { codepage, c, at } => {
                 write!(f, "'{c}' (U+{:04X}) at character {at} is not in {}", c as u32, codepage.name())
@@ -91,21 +99,32 @@ pub fn decode(codepage: Codepage, text: &str) -> Result<String, Error> {
         .enumerate()
         .map(|(at, c)| codepage.byte(c).ok_or(Error::NotInCodepage { codepage, c, at }))
         .collect::<Result<Vec<u8>, Error>>()?;
-    String::from_utf8(bytes).map_err(|e| Error::NotUtf8 {
+    let s = String::from_utf8(bytes).map_err(|e| Error::NotUtf8 {
         at: e.utf8_error().valid_up_to(),
         incomplete: e.utf8_error().error_len().is_none(),
-    })
+    })?;
+    match s.chars().position(|c| c == '\u{FFFD}') {
+        Some(at) => Err(Error::Damaged(at)),
+        None => Ok(s),
+    }
 }
 
-/// Whether `text` looks like UTF-8 read as `codepage`: some character whose byte starts a multi-byte
-/// UTF-8 character (C2-F4) is followed by one whose byte continues it (80-BF), or the text has U+FFFD
-/// next to bytes above 0x7F. Plain Korean, ASCII and ordinary Latin text (`café`, `naïve`) do not.
+/// Whether `text` looks like UTF-8 read as `codepage`: some characters map to one complete multi-byte
+/// UTF-8 character, a lead byte (C2-F4) and exactly the continuation bytes it needs. An accented letter
+/// that happens to be a lead byte before punctuation in 80-BF (`café’s`, `résumé…`, `«Café»`) is not
+/// enough, and neither is U+FFFD; plain Korean and ASCII never are.
 fn looks_like(codepage: Codepage, text: &str) -> bool {
     let bytes: Vec<Option<u8>> = text.chars().map(|c| codepage.byte(c)).collect();
-    let pair = bytes.windows(2).any(|w| {
-        matches!(w[0], Some(0xC2..=0xF4)) && matches!(w[1], Some(0x80..=0xBF))
-    });
-    pair || (text.contains('\u{FFFD}') && bytes.iter().any(|b| b.is_some_and(|b| b >= 0x80)))
+    bytes.iter().enumerate().any(|(i, b)| {
+        let len = match b {
+            Some(0xC2..=0xDF) => 2,
+            Some(0xE0..=0xEF) => 3,
+            Some(0xF0..=0xF4) => 4,
+            _ => return false,
+        };
+        let seq: Option<Vec<u8>> = bytes.get(i..i + len).and_then(|w| w.iter().copied().collect());
+        seq.is_some_and(|s| std::str::from_utf8(&s).is_ok())
+    })
 }
 
 /// The recovered text and why, or why it does not recover.
@@ -179,17 +198,31 @@ mod tests {
         assert_eq!(misread("곁"), "ê³\u{81}");
         assert_eq!(decode(W, "ê³"), Err(Error::NotUtf8 { at: 0, incomplete: true }));
         assert_eq!(decode(W, "plain ascii"), Ok("plain ascii".to_string()));
+        // `ï¿½` is EF BF BD, U+FFFD: the text was decoded lossily, saved, and then misread.
+        assert_eq!(decode(W, "ì•ˆë…•ï¿½"), Err(Error::Damaged(2)));
+        assert_eq!(decode(W, "cafÃ©ï¿½"), Err(Error::Damaged(4)));
     }
 
     #[test]
     fn inspects() {
-        for text in ["안녕하세요", "hello_world", "café", "naïve", "©2026", "100% done", ""] {
+        for text in [
+            "안녕하세요", "hello_world", "café", "naïve", "©2026", "100% done", "",
+            // A lead byte before punctuation in 80-BF is not a complete sequence.
+            "café’s", "résumé…", "„Café“", "«Café»", "naïve’s", "×÷", "España°", "naïve �",
+        ] {
             assert_eq!(inspect(W, text), None, "{text}");
         }
         assert!(matches!(inspect(W, "ì•ˆë…•"), Some(Ok((s, _))) if s == "안녕"));
+        assert!(matches!(inspect(W, "Â·"), Some(Ok((s, _))) if s == "·"));
+        assert!(matches!(inspect(W, "ðŸ˜€"), Some(Ok((s, _))) if s == "😀"));
         assert!(matches!(inspect(W, "ì•ˆë…"), Some(Err(_))));
         let lossy = inspect(W, "ì•ˆ�").unwrap().unwrap_err();
         assert!(lossy.starts_with("lossy: "));
+        // U+FFFD in the result: lossy, and no "decoded twice" note on what is left.
+        for text in ["ì•ˆë…•ï¿½", "cafÃ©ï¿½"] {
+            let e = inspect(W, text).unwrap().unwrap_err();
+            assert!(e.starts_with("lossy: the decoded text contains U+FFFD") && !e.contains("twice"), "{text}");
+        }
         // Decoded twice: the first pass gives mojibake again, and the reason says so.
         let twice = misread(&misread("안녕"));
         let (once, reason) = inspect(W, &twice).unwrap().unwrap();

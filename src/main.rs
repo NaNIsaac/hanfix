@@ -293,8 +293,8 @@ escaped text and mojibake (only as the first argument; \"hanfix -- inspect\" con
   hanfix decode --type percent %ED%8A%B8%EB%A6%AC    트리
   hanfix decode --type mojibake --source-encoding windows-1252 ì•ˆë…•    안녕
   decode prints only the result; text that is not an escape is kept. An incomplete or invalid
-  UTF-8 sequence prints nothing and fails. Mojibake takes the whole text back to windows-1252
-  bytes; a character not in it, or U+FFFD (already lost), fails.
+  UTF-8 sequence prints nothing and fails, and so does a result with U+FFFD (already lost).
+  Mojibake takes the whole text back to windows-1252 bytes; a character not in it fails.
 
 exit status: 0 on success, 1 when decode fails or the input of inspect or decode is not UTF-8,
 2 on a usage error.
@@ -353,14 +353,14 @@ fn read_stdin() -> Result<Vec<u8>, ExitCode> {
     Ok(buf)
 }
 
-/// `hanfix inspect` and `hanfix decode`. Their text is read strictly as UTF-8: a decoder that
-/// replaced bad input bytes would hide the very damage it is asked about.
 enum Mode {
     Inspect,
     Escape(encoding::Kind),
     Mojibake(mojibake::Codepage),
 }
 
+/// `hanfix inspect` and `hanfix decode`. Their text is read strictly as UTF-8: a decoder that
+/// replaced bad input bytes would hide the very damage it is asked about.
 fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
     let (mut ty, mut source): (Option<String>, Option<String>) = (None, None);
     while let Some(a) = args.first().cloned() {

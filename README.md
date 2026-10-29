@@ -235,9 +235,10 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 - A byte sequence split between the two types (`%ED_8A_B8`) decodes with neither.
 - Consecutive escapes form one byte sequence that must be complete, valid UTF-8. If any sequence in the
   text is not (`_ED_8A` is two bytes of a three-byte character), `decode` prints nothing, writes the reason to
-  standard error and exits with 1. It never substitutes `�`. Input on standard input that is not UTF-8
-  makes `inspect` and `decode` exit with 1 too.
-- `decode` prints only the result; text with no escapes comes back unchanged with exit 0. `inspect` never
+  standard error and exits with 1. It never substitutes `�`. A result that contains `�` fails the same way
+  (`%EF%BF%BD` is `�` itself): the text was already damaged before it was escaped. Input on standard input
+  that is not UTF-8 makes `inspect` and `decode` exit with 1 too.
+- `decode` prints only the result; text with no escapes (and no `�`) comes back unchanged with exit 0. `inspect` never
   fails on UTF-8 text and changes nothing.
 - `inspect` and `decode` are subcommands only as the first argument. `hanfix -- inspect` and `hf` still convert
   the word as typed text.
@@ -270,11 +271,12 @@ hanfix: error: lossy: U+FFFD at character 3 means a byte was already replaced; t
 - The whole text is converted. A character that windows-1252 does not have (`안` in `안녕 ì•ˆë…•`), or bytes
   that are not complete UTF-8, fail with exit 1 and nothing on standard output.
 - `�` (U+FFFD) means a byte was already replaced before hanfix saw the text. No tool can say which byte it was,
-  so `decode` fails and `inspect` reports it as lossy. Copy and paste can also drop those invisible control
-  characters, and then the text does not decode either.
-- `inspect` lists a mojibake candidate only when the text looks like one: a character whose byte starts a
-  multi-byte UTF-8 character followed by one whose byte continues it. Korean, ASCII and ordinary accented text
-  (`café`, `naïve`) give none. When the result looks like mojibake again, the reason says so (it was misread
+  so `decode` fails and `inspect` reports it as lossy. The same goes for `ï¿½`, the three bytes of `�` misread:
+  the result would contain `�`. Copy and paste can also drop those invisible control characters, and then the
+  text does not decode either.
+- `inspect` lists a mojibake candidate only when the text looks like one: some characters whose bytes form
+  one complete multi-byte UTF-8 character (`ì•ˆ` is `EC 95 88`, `안`). Korean, ASCII and ordinary accented
+  text give none, also next to typographic punctuation (`café’s`, `résumé…`, `«Café»`). When the result looks like mojibake again, the reason says so (it was misread
   twice; decode the result once more).
 - CP949 / EUC-KR (UTF-8 opened as Korean Windows text, `?덈뀞`-like output) is not supported: it would need a
   table of about 17,000 characters, and that kind of misreading usually loses bytes on the way.
@@ -392,6 +394,8 @@ Characters that are not on the layout (digits, spaces, symbols) are left as they
 - **One direction per line.** In mixed text like `git ㅔㅕ노`, the Hangul means everything goes to English
   keys, including any Hangul word you meant to keep.
 - **2-set only.** 3-set (세벌식) and non-QWERTY English layouts (Dvorak etc.) are not supported.
+- **Decomposed (NFD) text is not composed.** macOS file names can store `ì` as `i` and a combining accent.
+  Mojibake in that form does not decode, and `inspect` does not detect it; compose it to NFC first.
 
 ## Development
 
