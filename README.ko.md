@@ -219,12 +219,19 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 - **underscore-hex** (`_XX`): `_` 뒤에 대문자 16진수 두 자리, 바이트 `80`-`FF`만 해당합니다. ASCII는 이스케이프할
   필요가 없으므로 `backup_2026_10_29`, `hello_bed`, `report__ED_8A_B8`의 첫 `_`는 그대로 두고, `__`를 공백으로
   바꾸지도 않습니다. `_ed_8a_b8`처럼 소문자로 된 것은 되돌리지 않으며, `inspect`가 이를 보면 안내 한 줄을 덧붙입니다.
+- underscore-hex의 이어진 이스케이프는 UTF-8 글자를 시작할 수 없는 바이트(`80`-`BF`, `C0`, `C1`, `F5`-`FF`)에서도
+  끝나고, 그 바이트는 글자로 둡니다. 그래서 `IMG_8123.JPG`와 `test_99.txt`는 그대로 나오고,
+  `_ED_8A_B8_99.txt`는 `트_99.txt`가 됩니다. 글자를 시작하는 바이트는 나머지 바이트가 있어야 하므로,
+  `트리_DB_backup.sql`을 `_ED_8A_B8_EB_A6_AC_DB_backup.sql`로 쓴 이름은 실패합니다. `_DB`는 2바이트 글자의
+  시작인데 뒤가 없습니다.
 - **percent** (`%XX`): URL 인코딩입니다. 모든 바이트, 대소문자 모두 받습니다(`%20`은 공백). 뒤에 16진수 두
-  자리가 없는 `%`는 글자로 둡니다(`100% done`). `+`는 그대로 `+`입니다. 공백을 뜻하는 것은 HTML 폼 데이터뿐입니다.
+  자리가 없는 `%`는 글자로 둡니다(`100% done`). `+`는 그대로 `+`입니다. 공백을 뜻하는 것은 HTML 폼 데이터뿐입니다. 모든 `%XX`를
+  이스케이프로 보므로 `%ED%8A%B8%99`는 실패합니다.
+- 두 형식에 나뉘어 들어간 바이트열(`%ED_8A_B8`)은 어느 쪽으로도 되돌리지 않습니다.
 - 이어진 이스케이프는 하나의 바이트열로 보고, 완전하고 유효한 UTF-8이어야 합니다. 하나라도 아니면(`_ED_8A`는
   3바이트 글자의 앞 2바이트) `decode`는 아무것도 출력하지 않고, 이유를 표준 오류에 쓰고, 종료 코드 1로 끝납니다.
-  `�`로 바꿔 넣지 않습니다.
-- `decode`는 결과만 출력합니다. 이스케이프가 없는 글자는 그대로 나오고 종료 코드는 0입니다. `inspect`는 일반
+  `�`로 바꿔 넣지 않습니다. 표준 입력이 UTF-8이 아니면 `inspect`와 `decode` 모두 종료 코드 1로 끝납니다.
+- `decode`는 결과만 출력합니다. 이스케이프가 없는 글자는 그대로 나오고 종료 코드는 0입니다. `inspect`는 UTF-8
   글자에서 실패하지 않고 아무것도 바꾸지 않습니다.
 - `inspect`와 `decode`는 첫 번째 인자일 때만 하위 명령입니다. `hanfix -- inspect`와 `hf`는 지금처럼 글자를 변환합니다.
 - 유효한 UTF-8이라는 것은 바이트가 글자를 이룬다는 뜻일 뿐, 원래 뜻한 글이라는 보장은 아닙니다. 그래서 hanfix는
@@ -233,7 +240,8 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 
 **이스케이프된 이름의 파일 여러 개를 한꺼번에 바꾸기 (PowerShell).** 함수를 정의한 뒤 폴더에서
 `Rename-Decoded`를 실행하면 `old -> new` 목록만 보여 줍니다. 실제로 바꾸려면 `-Apply`를 붙입니다. 되돌릴 수
-없는 이름, 바뀌지 않는 이름, 파일 이름이 될 수 없는 결과, 이미 있는 파일을 덮어쓰게 되는 경우는 건너뜁니다.
+없는 이름, 바뀌지 않는 이름, 파일 이름이 될 수 없는 결과(제어 문자, 끝의 점이나 공백, `NUL` 같은 Windows 장치 이름), 이미 있는 파일이나 같은
+실행에서 먼저 바꾸기로 한 이름과 겹치는 경우(대소문자 무시)는 건너뜁니다.
 
 ```powershell
 function Rename-Decoded {
@@ -241,17 +249,25 @@ function Rename-Decoded {
     # hanfix 0.2.7 and older read "decode ..." as text to convert and exit 0, which would rename every file.
     $probe = (hanfix decode --type percent -- '%41' 2>$null) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $probe -ne 'A') { throw 'hanfix too old: update with hanfix --update' }
+    # Every name in the folder and every new name planned so far, ignoring case, so the preview lists
+    # exactly what -Apply does.
+    $taken = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    Get-ChildItem -LiteralPath $Path -Force -Name | ForEach-Object { [void]$taken.Add($_) }
     $enc = [Console]::OutputEncoding
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
     try {
         foreach ($f in Get-ChildItem -LiteralPath $Path -File) {
-            $new = (hanfix decode --type $Type -- $f.Name 2>$null) -join "`n"
+            $out = @(hanfix decode --type $Type -- $f.Name 2>$null)
             if ($LASTEXITCODE -ne 0) { Write-Warning "skip $($f.Name): does not decode"; continue }
-            if ($new -eq $f.Name) { continue }
-            if ($new -in '.', '..' -or $new.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+            $new = $out[0]
+            if ($new -ceq $f.Name) { continue }
+            # One line, no control characters, no trailing dot or space, which Windows drops ("a." -> "a"),
+            # and no Windows device name.
+            if ($out.Count -ne 1 -or $new -match '[\x00-\x1F\x7F]|[. ]$|^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)' -or
+                $new.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
                 Write-Warning "skip $($f.Name): '$new' is not a file name"; continue
             }
-            if (Test-Path -LiteralPath (Join-Path $f.DirectoryName $new)) { Write-Warning "skip $($f.Name): $new exists"; continue }
+            if (-not $taken.Add($new)) { Write-Warning "skip $($f.Name): $new exists or is planned"; continue }
             "$($f.Name) -> $new"
             if ($Apply) { Rename-Item -LiteralPath $f.FullName -NewName $new }
         }
@@ -282,7 +298,7 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
 
 - 옵션은 맨 앞에서만 읽습니다. 나머지는 전부 변환할 글자로 봅니다. 그래서 `hanfix ㅣㄴ -ㅁ`의 `-ㅁ`은 옵션이 아니라 글자(`-a`)입니다.
 - `-`로 시작하는 영문 글자를 바꾸려면 앞에 `--`를 붙이세요: `hanfix -- -rk` → `-가`.
-- 종료 코드는 성공 0, `decode` 실패 1, 잘못된 사용 2입니다.
+- 종료 코드는 성공 0, `decode` 실패와 `inspect`·`decode`의 입력이 UTF-8이 아닐 때 1, 잘못된 사용 2입니다.
 
 ### 입력 중인 줄 바로 고치기 (선택)
 

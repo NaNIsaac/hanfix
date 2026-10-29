@@ -57,7 +57,13 @@ pub struct DecodeError {
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let what = if self.incomplete { "incomplete UTF-8 sequence" } else { "invalid UTF-8" };
-        write!(f, "{what} in {} escape '{}' at character {}", self.kind.name(), self.run, self.at)
+        // A run can be megabytes long on standard input; the start and the length locate it.
+        let run = if self.run.len() > 40 {
+            format!("{}...' ({} characters)", &self.run[..40], self.run.len())
+        } else {
+            format!("{}'", self.run)
+        };
+        write!(f, "{what} in {} escape '{run} at character {}", self.kind.name(), self.at)
     }
 }
 
@@ -68,11 +74,30 @@ pub struct Decoded {
     pub bytes: usize,
 }
 
+/// Bytes that follow a UTF-8 lead byte; 0 for a byte no character starts with (80-BF, C0, C1, F5-FF).
+fn continuation_bytes(lead: u8) -> usize {
+    match lead {
+        0x00..=0x7F => 0,
+        0xC2..=0xDF => 1,
+        0xE0..=0xEF => 2,
+        0xF0..=0xF4 => 3,
+        _ => usize::MAX,
+    }
+}
+
+impl Kind {
+    /// An escape that may start a run. In underscore-hex a byte no UTF-8 character starts with is text:
+    /// `IMG_8123` and `test_99` are names, not escapes. Percent escapes are always escapes.
+    fn starts_run(self, b: &[u8], i: usize) -> bool {
+        self.escape_at(b, i).is_some_and(|v| self == Kind::Percent || continuation_bytes(v) != usize::MAX)
+    }
+}
+
 pub fn decode(kind: Kind, text: &str) -> Result<Decoded, DecodeError> {
     let b = text.as_bytes();
     let (mut out, mut bytes, mut i, mut copied) = (String::with_capacity(text.len()), 0, 0, 0);
     while i < b.len() {
-        if kind.escape_at(b, i).is_none() {
+        if !kind.starts_run(b, i) {
             i += 1;
             continue;
         }
@@ -80,7 +105,19 @@ pub fn decode(kind: Kind, text: &str) -> Result<Decoded, DecodeError> {
         out.push_str(&text[copied..i]);
         let start = i;
         let mut run = Vec::new();
+        // Continuation bytes the current character still needs. At a character start, an underscore-hex
+        // byte that cannot begin one ends the run (`_ED_8A_B8_99` is 트 then `_99`); inside a character
+        // every escape is taken, so a bad one is reported rather than left as text.
+        let mut need = 0;
         while let Some(v) = kind.escape_at(b, i) {
+            if need == 0 {
+                if !kind.starts_run(b, i) {
+                    break;
+                }
+                need = continuation_bytes(v).min(3);
+            } else {
+                need -= 1;
+            }
             run.push(v);
             i += 3;
         }
@@ -241,14 +278,39 @@ mod tests {
         assert!(e.incomplete && e.run == "%ED%8A" && e.at == 1);
         let e = decode(Kind::Percent, "%FF").unwrap_err();
         assert!(!e.incomplete);
-        let e = decode(Kind::UnderscoreHex, "트_8A").unwrap_err();
-        assert_eq!((e.at, e.incomplete), (1, false));
+        // A lead byte with what follows it missing still fails, also before plain text.
+        let e = decode(Kind::UnderscoreHex, "트리_DB_backup.sql").unwrap_err();
+        assert!(e.incomplete && e.run == "_DB" && e.at == 2);
+        // Inside a character every escape is taken, so a wrong one is reported, not kept as text.
+        let e = decode(Kind::UnderscoreHex, "_ED_C3_A9").unwrap_err();
+        assert!(!e.incomplete && e.run == "_ED_C3_A9");
+        assert!(decode(Kind::UnderscoreHex, "_ED_A0_80").is_err());
         // A good run does not save a later bad one.
         assert!(decode(Kind::UnderscoreHex, "_ED_8A_B8 _ED").is_err());
         assert_eq!(
             decode(Kind::UnderscoreHex, "_ED_8A").unwrap_err().to_string(),
             "incomplete UTF-8 sequence in underscore-hex escape '_ED_8A' at character 0"
         );
+        let long = "_ED_8A_B8".repeat(1000) + "_ED";
+        assert_eq!(
+            decode(Kind::UnderscoreHex, &long).unwrap_err().to_string(),
+            "incomplete UTF-8 sequence in underscore-hex escape '_ED_8A_B8_ED_8A_B8_ED_8A_B8_ED_8A_B8_ED_...' \
+             (9003 characters) at character 0"
+        );
+    }
+
+    #[test]
+    fn underscore_bytes_that_start_no_character_are_text() {
+        for text in ["IMG_8123.JPG", "DSC_9001.JPG", "test_99.txt", "_8A", "트_8A", "_C0_80", "_C1_BF", "_F5_80_80_80", "_FF"] {
+            assert_eq!(decode(Kind::UnderscoreHex, text), Ok(Decoded { text: text.to_string(), bytes: 0 }), "{text}");
+        }
+        assert_eq!(ok(Kind::UnderscoreHex, "_ED_8A_B8_99.txt"), "트_99.txt");
+        assert_eq!(ok(Kind::UnderscoreHex, "IMG_8123__ED_8A_B8.jpg"), "IMG_8123_트.jpg");
+        assert_eq!(ok(Kind::UnderscoreHex, "_ED_8A_B8_99_EB_A6_AC"), "트_99리");
+        assert_eq!(ok(Kind::UnderscoreHex, "_C3_A9_F0_9F_98_80"), "é😀");
+        assert!(inspect("IMG_8123.JPG").is_empty());
+        // Percent stays strict: every %XX is an escape.
+        assert!(decode(Kind::Percent, "%ED%8A%B8%99").is_err());
     }
 
     #[test]

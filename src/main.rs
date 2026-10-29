@@ -292,7 +292,8 @@ escaped text (only as the first argument; \"hanfix -- inspect\" converts the wor
   decode prints only the result; text that is not an escape is kept. An incomplete or invalid
   UTF-8 sequence prints nothing and fails.
 
-exit status: 0 on success, 1 when decode fails, 2 on a usage error.
+exit status: 0 on success, 1 when decode fails or the input of inspect or decode is not UTF-8,
+2 on a usage error.
 ",
         SHELLS.join(", ")
     )
@@ -374,6 +375,9 @@ fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
             None if !args.is_empty() => args.remove(0),
             None => return usage_error("--type needs a value"),
         };
+        if kind.is_some() {
+            return usage_error("--type given twice");
+        }
         match encoding::Kind::parse(&val) {
             Some(k) => kind = Some(k),
             None => return usage_error(&format!("--type: choose underscore-hex or percent, not '{val}'")),

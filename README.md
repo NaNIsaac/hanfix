@@ -224,13 +224,21 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
   escaping, so `backup_2026_10_29`, `hello_bed` and the first `_` of `report__ED_8A_B8` stay as they are, and
   `__` never becomes a space. Lower-case runs such as `_ed_8a_b8` are not decoded; `inspect` adds a note
   when it sees one.
+- A run of underscore-hex escapes also ends at a byte that cannot start a UTF-8 character (`80`-`BF`, `C0`,
+  `C1`, `F5`-`FF`), which stays text: `IMG_8123.JPG` and `test_99.txt` come back unchanged, and
+  `_ED_8A_B8_99.txt` becomes `트_99.txt`. A byte that does start a character still needs the rest of it, so
+  a name like `트리_DB_backup.sql` written as `_ED_8A_B8_EB_A6_AC_DB_backup.sql` fails: `_DB` starts a
+  two-byte character and nothing follows.
 - **percent** (`%XX`): URL encoding, any byte, either case (`%20` is a space). A `%` without two hex digits
-  after it is text (`100% done`). `+` stays `+`; it means a space only in HTML form data.
+  after it is text (`100% done`). `+` stays `+`; it means a space only in HTML form data. Every `%XX` is an
+  escape, so `%ED%8A%B8%99` fails.
+- A byte sequence split between the two types (`%ED_8A_B8`) decodes with neither.
 - Consecutive escapes form one byte sequence that must be complete, valid UTF-8. If any sequence in the
   text is not (`_ED_8A` is two bytes of a three-byte character), `decode` prints nothing, writes the reason to
-  standard error and exits with 1. It never substitutes `�`.
+  standard error and exits with 1. It never substitutes `�`. Input on standard input that is not UTF-8
+  makes `inspect` and `decode` exit with 1 too.
 - `decode` prints only the result; text with no escapes comes back unchanged with exit 0. `inspect` never
-  fails on plain text and changes nothing.
+  fails on UTF-8 text and changes nothing.
 - `inspect` and `decode` are subcommands only as the first argument. `hanfix -- inspect` and `hf` still convert
   the word as typed text.
 - Valid UTF-8 only means the bytes form characters, not that they are the text someone meant. That is why
@@ -239,7 +247,8 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 
 **Rename many files with escaped names (PowerShell).** Define the function, then run `Rename-Decoded` in a
 folder: it only lists `old -> new`. Add `-Apply` to rename. It skips a name that does not decode, does not
-change, would not be a valid file name, or would overwrite an existing file.
+change, would not be a valid file name (control characters, a trailing dot or space, a Windows device name such as `NUL`), or would take the name
+of an existing file or of another file renamed in the same run (ignoring case).
 
 <!-- rename-example -->
 ```powershell
@@ -248,17 +257,25 @@ function Rename-Decoded {
     # hanfix 0.2.7 and older read "decode ..." as text to convert and exit 0, which would rename every file.
     $probe = (hanfix decode --type percent -- '%41' 2>$null) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $probe -ne 'A') { throw 'hanfix too old: update with hanfix --update' }
+    # Every name in the folder and every new name planned so far, ignoring case, so the preview lists
+    # exactly what -Apply does.
+    $taken = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    Get-ChildItem -LiteralPath $Path -Force -Name | ForEach-Object { [void]$taken.Add($_) }
     $enc = [Console]::OutputEncoding
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
     try {
         foreach ($f in Get-ChildItem -LiteralPath $Path -File) {
-            $new = (hanfix decode --type $Type -- $f.Name 2>$null) -join "`n"
+            $out = @(hanfix decode --type $Type -- $f.Name 2>$null)
             if ($LASTEXITCODE -ne 0) { Write-Warning "skip $($f.Name): does not decode"; continue }
-            if ($new -eq $f.Name) { continue }
-            if ($new -in '.', '..' -or $new.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+            $new = $out[0]
+            if ($new -ceq $f.Name) { continue }
+            # One line, no control characters, no trailing dot or space, which Windows drops ("a." -> "a"),
+            # and no Windows device name.
+            if ($out.Count -ne 1 -or $new -match '[\x00-\x1F\x7F]|[. ]$|^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)' -or
+                $new.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
                 Write-Warning "skip $($f.Name): '$new' is not a file name"; continue
             }
-            if (Test-Path -LiteralPath (Join-Path $f.DirectoryName $new)) { Write-Warning "skip $($f.Name): $new exists"; continue }
+            if (-not $taken.Add($new)) { Write-Warning "skip $($f.Name): $new exists or is planned"; continue }
             "$($f.Name) -> $new"
             if ($Apply) { Rename-Item -LiteralPath $f.FullName -NewName $new }
         }
@@ -290,7 +307,8 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
 - Options are read only at the start; the rest is text to convert. So the `-ㅁ` in `hanfix ㅣㄴ -ㅁ` is
   text (`-a`), not an option.
 - To convert English text that starts with `-`, put `--` first: `hanfix -- -rk` → `-가`.
-- Exit status: 0 on success, 1 when `decode` fails, 2 on a usage error.
+- Exit status: 0 on success, 1 when `decode` fails or the input of `inspect` or `decode` is not UTF-8, 2 on
+  a usage error.
 
 ### Fix the line you are typing (optional)
 

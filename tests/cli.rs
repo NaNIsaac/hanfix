@@ -29,6 +29,8 @@ fn decode_prints_only_the_result() {
     assert_eq!(stdout(&["decode", "--type=percent", "%ED%8A%B8%EB%A6%AC"]), "트리\n");
     assert_eq!(stdout(&["decode", "--type", "underscore-hex", "--", "file__ED_8A_B8.txt"]), "file_트.txt\n");
     assert_eq!(stdout(&["decode", "--type", "underscore-hex", "backup_2026_10_29"]), "backup_2026_10_29\n");
+    assert_eq!(stdout(&["decode", "--type", "underscore-hex", "IMG_8123.JPG"]), "IMG_8123.JPG\n");
+    assert_eq!(stdout(&["decode", "--type", "underscore-hex", "_ED_8A_B8_99.txt"]), "트_99.txt\n");
     assert_eq!(stdout(&["decode", "--type", "percent", "100%", "done"]), "100% done\n");
 }
 
@@ -67,6 +69,7 @@ fn usage_errors() {
         &["decode", "_ED_8A_B8"][..],
         &["decode", "--type", "base64", "x"],
         &["decode", "--type"],
+        &["decode", "--type", "percent", "--type", "underscore-hex", "%41_ED_8A_B8"],
         &["inspect", "--type", "percent", "x"],
         &["inspect", "-x"],
     ] {

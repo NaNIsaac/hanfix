@@ -57,6 +57,18 @@ try {
     $want = ('_EB_A6_AC.md', 'backup_2026_10_29.txt', 'bad_ED_8A.txt', "$ri.md", "$tree.txt" | Sort-Object) -join '|'
     if ($after -ne $want) { throw "FAIL rename apply: got '$after'" }
 
+    # Preview and -Apply agree: no trailing dot or space (Windows would drop it), no control characters, no device name,
+    # and no two files given the same name in one run (ignoring case).
+    $p = Join-Path $dir 'p'
+    New-Item -ItemType Directory $p | Out-Null
+    'a%0Db.txt', 'a%2E', 'b%20', 'N%55L', 'x%41.txt', 'x%61.txt' | ForEach-Object { New-Item -ItemType File (Join-Path $p $_) | Out-Null }
+    $preview = @(Rename-Decoded -Path $p -Type percent 3>$null) -join '|'
+    $applied = @(Rename-Decoded -Path $p -Type percent -Apply 3>$null) -join '|'
+    if ($preview -ne 'x%41.txt -> xA.txt' -or $applied -ne $preview) { throw "FAIL rename percent: '$preview' / '$applied'" }
+    $after = (Get-ChildItem -LiteralPath $p -Name | Sort-Object) -join '|'
+    $want = ('a%0Db.txt', 'a%2E', 'b%20', 'N%55L', 'x%61.txt', 'xA.txt' | Sort-Object) -join '|'
+    if ($after -ne $want) { throw "FAIL rename percent apply: got '$after'" }
+
     # An older hanfix (0.2.7) treats "decode ..." as text: the example must stop before listing or renaming.
     $real = (Get-Command hanfix -CommandType Application | Select-Object -First 1).Source
     function hanfix { & $real -- @args }
