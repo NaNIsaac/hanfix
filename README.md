@@ -243,7 +243,41 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
   the word as typed text.
 - Valid UTF-8 only means the bytes form characters, not that they are the text someone meant. That is why
   hanfix never decodes on its own: you name the type, and `inspect` shows the candidate first.
-- Mojibake (UTF-8 read as another encoding, `ì•ˆë…•` for `안녕`) is not handled yet.
+- Mojibake has its own type, below.
+
+**Mojibake** is UTF-8 text that something read in another encoding: `안녕` saved as UTF-8 and opened as
+windows-1252 shows as `ì•ˆë…•`. `--type mojibake` runs that misreading backwards: every character goes back to
+its windows-1252 byte, and the bytes are read as UTF-8.
+
+```console
+$ hanfix inspect 'ì•ˆë…•'
+Detected: mojibake
+Status: valid
+Encoding: UTF-8 read as windows-1252
+Reason: every character is in windows-1252, and its 6 bytes are valid UTF-8; valid UTF-8 does not prove this is the original text
+
+Original:  ì•ˆë…•
+Candidate: 안녕
+$ hanfix decode --type mojibake --source-encoding windows-1252 'ì•ˆë…•'
+안녕
+$ hanfix decode --type mojibake --source-encoding windows-1252 'ì•ˆ�'
+hanfix: error: lossy: U+FFFD at character 3 means a byte was already replaced; the original cannot be recovered
+```
+
+- `--source-encoding` is required: the encoding that misread the text. `windows-1252` (also `cp1252`) is the
+  one supported. All of its 256 bytes are mapped, the five Microsoft leaves undefined (`81`, `8D`, `8F`, `90`,
+  `9D`) as the invisible control characters of the same number, as browsers do.
+- The whole text is converted. A character that windows-1252 does not have (`안` in `안녕 ì•ˆë…•`), or bytes
+  that are not complete UTF-8, fail with exit 1 and nothing on standard output.
+- `�` (U+FFFD) means a byte was already replaced before hanfix saw the text. No tool can say which byte it was,
+  so `decode` fails and `inspect` reports it as lossy. Copy and paste can also drop those invisible control
+  characters, and then the text does not decode either.
+- `inspect` lists a mojibake candidate only when the text looks like one: a character whose byte starts a
+  multi-byte UTF-8 character followed by one whose byte continues it. Korean, ASCII and ordinary accented text
+  (`café`, `naïve`) give none. When the result looks like mojibake again, the reason says so (it was misread
+  twice; decode the result once more).
+- CP949 / EUC-KR (UTF-8 opened as Korean Windows text, `?덈뀞`-like output) is not supported: it would need a
+  table of about 17,000 characters, and that kind of misreading usually loses bytes on the way.
 
 **Rename many files with escaped names (PowerShell).** Define the function, then run `Rename-Decoded` in a
 folder: it only lists `old -> new`. Add `-Apply` to rename. It skips a name that does not decode, does not
@@ -291,6 +325,7 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --update
        hanfix inspect [--] [TEXT ...]
        hanfix decode --type {underscore-hex,percent} [--] [TEXT ...]
+       hanfix decode --type mojibake --source-encoding windows-1252 [--] [TEXT ...]
 ```
 
 | Option | Description |
@@ -302,7 +337,8 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
 | `--init SHELL` | Print the shell code that defines `hf`. |
 | `--alias NAME` | Name of the function `--init` defines. Default `hf`. |
 | `--` | End of options. Everything after is text. |
-| `--type TYPE` | `decode` only: `underscore-hex` or `percent`. Required. |
+| `--type TYPE` | `decode` only: `underscore-hex`, `percent` or `mojibake`. Required. |
+| `--source-encoding ENC` | `decode --type mojibake` only: `windows-1252` (or `cp1252`). Required there. |
 
 - Options are read only at the start; the rest is text to convert. So the `-ㅁ` in `hanfix ㅣㄴ -ㅁ` is
   text (`-a`), not an option.

@@ -6,6 +6,8 @@
 
 use std::fmt;
 
+use crate::mojibake;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
     UnderscoreHex,
@@ -142,7 +144,7 @@ pub fn decode(kind: Kind, text: &str) -> Result<Decoded, DecodeError> {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Status {
     Valid,
-    /// Valid on its own, but the text also has escapes of the other kind, which this one leaves alone.
+    /// Valid on its own, but the text also fits another type, which this one leaves alone.
     Ambiguous,
     Invalid,
 }
@@ -159,31 +161,48 @@ impl Status {
 
 #[derive(Debug, PartialEq)]
 pub struct Candidate {
-    pub kind: Kind,
+    /// The `--type` that decodes it.
+    pub detected: &'static str,
+    /// How the text came to be: escaped UTF-8, or UTF-8 read as a code page.
+    pub encoding: String,
     pub status: Status,
-    /// `None` when the escapes do not decode.
+    /// `None` when it does not decode.
     pub decoded: Option<String>,
     pub reason: String,
 }
 
-/// Every kind of escape found in `text`, each decoded on its own. Empty for plain text.
+/// Every type the text fits, each decoded on its own: escapes of either kind, and mojibake per code
+/// page. Empty for plain text, including plain Korean.
 pub fn inspect(text: &str) -> Vec<Candidate> {
-    let found: Vec<_> = KINDS.into_iter().map(|k| (k, decode(k, text))).filter(|(_, r)| r.as_ref().map_or(true, |d| d.bytes > 0)).collect();
+    let mut found: Vec<(&'static str, String, mojibake::Outcome)> = Vec::new();
+    for kind in KINDS {
+        match decode(kind, text) {
+            Ok(d) if d.bytes == 0 => {}
+            Ok(d) => found.push((
+                kind.name(),
+                "UTF-8".into(),
+                Ok((d.text, format!("{} escaped bytes are valid UTF-8; other characters are kept", d.bytes))),
+            )),
+            Err(e) => found.push((kind.name(), "UTF-8".into(), Err(e.to_string()))),
+        }
+    }
+    for cp in mojibake::CODEPAGES {
+        if let Some(r) = mojibake::inspect(cp, text) {
+            found.push(("mojibake", format!("UTF-8 read as {}", cp.name()), r));
+        }
+    }
     let several = found.len() > 1;
     found
         .into_iter()
-        .map(|(kind, r)| match r {
-            Ok(d) => Candidate {
-                kind,
+        .map(|(detected, encoding, r)| match r {
+            Ok((decoded, reason)) => Candidate {
+                detected,
+                encoding,
                 status: if several { Status::Ambiguous } else { Status::Valid },
-                reason: if several {
-                    format!("{} escaped bytes are valid UTF-8, but the text also has other escapes, which this type keeps", d.bytes)
-                } else {
-                    format!("{} escaped bytes are valid UTF-8; other characters are kept", d.bytes)
-                },
-                decoded: Some(d.text),
+                reason: if several { reason + "; the text also fits another type, which this one does not decode" } else { reason },
+                decoded: Some(decoded),
             },
-            Err(e) => Candidate { kind, status: Status::Invalid, decoded: None, reason: e.to_string() },
+            Err(reason) => Candidate { detected, encoding, status: Status::Invalid, decoded: None, reason },
         })
         .collect()
 }
@@ -207,16 +226,17 @@ pub fn report(text: &str) -> String {
     };
     if found.is_empty() {
         return format!(
-            "Detected: none\nReason: no underscore-hex or percent escape found; the text is kept as is\n{note}\nOriginal:  {text}\n"
+            "Detected: none\nReason: no underscore-hex or percent escape and no mojibake found; the text is kept as is\n{note}\nOriginal:  {text}\n"
         );
     }
     let blocks: Vec<String> = found
         .iter()
         .map(|c| {
             let mut s = format!(
-                "Detected: {}\nStatus: {}\nEncoding: UTF-8\nReason: {}\n{note}\nOriginal:  {text}\n",
-                c.kind.name(),
+                "Detected: {}\nStatus: {}\nEncoding: {}\nReason: {}\n{note}\nOriginal:  {text}\n",
+                c.detected,
                 c.status.name(),
+                c.encoding,
                 c.reason
             );
             if let Some(d) = &c.decoded {

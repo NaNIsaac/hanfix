@@ -1,6 +1,7 @@
 //! hanfix: fix commands and text typed in the wrong keyboard layout (Korean 2-set <-> QWERTY).
 
 mod encoding;
+mod mojibake;
 
 use std::io::{self, IsTerminal, Read, Write};
 use std::process::ExitCode;
@@ -252,6 +253,7 @@ const USAGE: &str = "usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --update
        hanfix inspect [--] [TEXT ...]
        hanfix decode --type {underscore-hex,percent} [--] [TEXT ...]
+       hanfix decode --type mojibake --source-encoding windows-1252 [--] [TEXT ...]
 ";
 
 fn help() -> String {
@@ -285,12 +287,14 @@ shell setup (add one line to your shell's start-up file):
 
   then, after a mistyped command, type hf (or ㅗㄹ); hf -y runs it without asking.
 
-escaped text (only as the first argument; \"hanfix -- inspect\" converts the word):
-  hanfix inspect _ED_8A_B8_EB_A6_AC                  what the escapes are and what they decode to
+escaped text and mojibake (only as the first argument; \"hanfix -- inspect\" converts the word):
+  hanfix inspect _ED_8A_B8_EB_A6_AC                  what the text fits and what it decodes to
   hanfix decode --type underscore-hex _ED_8A_B8      트
   hanfix decode --type percent %ED%8A%B8%EB%A6%AC    트리
+  hanfix decode --type mojibake --source-encoding windows-1252 ì•ˆë…•    안녕
   decode prints only the result; text that is not an escape is kept. An incomplete or invalid
-  UTF-8 sequence prints nothing and fails.
+  UTF-8 sequence prints nothing and fails. Mojibake takes the whole text back to windows-1252
+  bytes; a character not in it, or U+FFFD (already lost), fails.
 
 exit status: 0 on success, 1 when decode fails or the input of inspect or decode is not UTF-8,
 2 on a usage error.
@@ -351,8 +355,14 @@ fn read_stdin() -> Result<Vec<u8>, ExitCode> {
 
 /// `hanfix inspect` and `hanfix decode`. Their text is read strictly as UTF-8: a decoder that
 /// replaced bad input bytes would hide the very damage it is asked about.
+enum Mode {
+    Inspect,
+    Escape(encoding::Kind),
+    Mojibake(mojibake::Codepage),
+}
+
 fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
-    let mut kind = None;
+    let (mut ty, mut source): (Option<String>, Option<String>) = (None, None);
     while let Some(a) = args.first().cloned() {
         if a == "--" {
             args.remove(0);
@@ -363,29 +373,46 @@ fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
             return ExitCode::SUCCESS;
         }
         let (opt, val) = a.split_once('=').map_or((a.as_str(), None), |(o, v)| (o, Some(v.to_string())));
-        if cmd != "decode" || opt != "--type" {
-            if a.starts_with('-') && a.len() > 1 && a.is_ascii() {
-                return usage_error(&format!("{cmd}: unknown option '{a}' (put -- before text that starts with -)"));
+        let slot = match opt {
+            "--type" if cmd == "decode" => &mut ty,
+            "--source-encoding" if cmd == "decode" => &mut source,
+            _ => {
+                if a.starts_with('-') && a.len() > 1 && a.is_ascii() {
+                    return usage_error(&format!("{cmd}: unknown option '{a}' (put -- before text that starts with -)"));
+                }
+                break;
             }
-            break;
-        }
+        };
+        let opt = opt.to_string();
         args.remove(0);
         let val = match val {
             Some(v) => v,
             None if !args.is_empty() => args.remove(0),
-            None => return usage_error("--type needs a value"),
+            None => return usage_error(&format!("{opt} needs a value")),
         };
-        if kind.is_some() {
-            return usage_error("--type given twice");
+        if slot.is_some() {
+            return usage_error(&format!("{opt} given twice"));
         }
-        match encoding::Kind::parse(&val) {
-            Some(k) => kind = Some(k),
-            None => return usage_error(&format!("--type: choose underscore-hex or percent, not '{val}'")),
+        *slot = Some(val);
+    }
+    let mode = match (cmd, ty.as_deref(), source.as_deref()) {
+        ("inspect", ..) => Mode::Inspect,
+        (_, None, _) => return usage_error("decode needs --type underscore-hex, percent or mojibake"),
+        (_, Some("mojibake"), None) => {
+            return usage_error("--type mojibake needs --source-encoding windows-1252")
         }
-    }
-    if cmd == "decode" && kind.is_none() {
-        return usage_error("decode needs --type underscore-hex or --type percent");
-    }
+        (_, Some("mojibake"), Some(s)) => match mojibake::Codepage::parse(s) {
+            Some(cp) => Mode::Mojibake(cp),
+            None => return usage_error(&format!("--source-encoding: windows-1252 is the one supported, not '{s}'")),
+        },
+        (_, Some(t), s) => match (encoding::Kind::parse(t), s) {
+            (Some(k), None) => Mode::Escape(k),
+            (Some(_), Some(_)) => return usage_error("--source-encoding goes with --type mojibake only"),
+            (None, _) => {
+                return usage_error(&format!("--type: choose underscore-hex, percent or mojibake, not '{t}'"))
+            }
+        },
+    };
     let text = if !args.is_empty() {
         args.join(" ")
     } else if io::stdin().is_terminal() {
@@ -403,15 +430,17 @@ fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
             }
         }
     };
-    let out = match kind {
-        None => encoding::report(&text),
-        Some(k) => match encoding::decode(k, &text) {
-            Ok(d) => d.text + "\n",
-            Err(e) => {
-                eprintln!("hanfix: error: {e}");
-                return ExitCode::FAILURE;
-            }
-        },
+    let decoded = match mode {
+        Mode::Inspect => Ok(encoding::report(&text)),
+        Mode::Escape(k) => encoding::decode(k, &text).map(|d| d.text + "\n").map_err(|e| e.to_string()),
+        Mode::Mojibake(cp) => mojibake::decode(cp, &text).map(|s| s + "\n").map_err(|e| e.to_string()),
+    };
+    let out = match decoded {
+        Ok(out) => out,
+        Err(e) => {
+            eprintln!("hanfix: error: {e}");
+            return ExitCode::FAILURE;
+        }
     };
     let _ = io::stdout().write_all(out.as_bytes());
     ExitCode::SUCCESS
