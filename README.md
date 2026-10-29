@@ -222,7 +222,8 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 
 - **underscore-hex** (`_XX`): `_` and two upper-case hex digits, for bytes `80`-`FF` only. ASCII never needs
   escaping, so `backup_2026_10_29`, `hello_bed` and the first `_` of `report__ED_8A_B8` stay as they are, and
-  `__` never becomes a space.
+  `__` never becomes a space. Lower-case runs such as `_ed_8a_b8` are not decoded; `inspect` adds a note
+  when it sees one.
 - **percent** (`%XX`): URL encoding, any byte, either case (`%20` is a space). A `%` without two hex digits
   after it is text (`100% done`). `+` stays `+`; it means a space only in HTML form data.
 - Consecutive escapes form one byte sequence that must be complete, valid UTF-8. If any sequence in the
@@ -244,6 +245,9 @@ change, would not be a valid file name, or would overwrite an existing file.
 ```powershell
 function Rename-Decoded {
     param([string]$Path = '.', [ValidateSet('underscore-hex', 'percent')][string]$Type = 'underscore-hex', [switch]$Apply)
+    # hanfix 0.2.7 and older read "decode ..." as text to convert and exit 0, which would rename every file.
+    $probe = (hanfix decode --type percent -- '%41' 2>$null) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $probe -ne 'A') { throw 'hanfix too old: update with hanfix --update' }
     $enc = [Console]::OutputEncoding
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
     try {

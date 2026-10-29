@@ -56,5 +56,16 @@ try {
     $after = (Get-ChildItem -LiteralPath $dir -Name | Sort-Object) -join '|'
     $want = ('_EB_A6_AC.md', 'backup_2026_10_29.txt', 'bad_ED_8A.txt', "$ri.md", "$tree.txt" | Sort-Object) -join '|'
     if ($after -ne $want) { throw "FAIL rename apply: got '$after'" }
+
+    # An older hanfix (0.2.7) treats "decode ..." as text: the example must stop before listing or renaming.
+    $real = (Get-Command hanfix -CommandType Application | Select-Object -First 1).Source
+    function hanfix { & $real -- @args }
+    try {
+        $before = (Get-ChildItem -LiteralPath $dir -Name | Sort-Object) -join '|'
+        $threw = $null
+        try { Rename-Decoded -Path $dir -Apply 3>$null | Out-Null } catch { $threw = $_.Exception.Message }
+        if ($threw -ne 'hanfix too old: update with hanfix --update') { throw "FAIL rename with old hanfix: got '$threw'" }
+        if (((Get-ChildItem -LiteralPath $dir -Name | Sort-Object) -join '|') -ne $before) { throw 'FAIL rename with old hanfix changed files' }
+    } finally { Remove-Item Function:hanfix }
 } finally { Remove-Item -LiteralPath $dir -Recurse -Force }
 Write-Host 'ok   powershell Rename-Decoded example'

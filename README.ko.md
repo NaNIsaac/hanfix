@@ -218,7 +218,7 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 
 - **underscore-hex** (`_XX`): `_` 뒤에 대문자 16진수 두 자리, 바이트 `80`-`FF`만 해당합니다. ASCII는 이스케이프할
   필요가 없으므로 `backup_2026_10_29`, `hello_bed`, `report__ED_8A_B8`의 첫 `_`는 그대로 두고, `__`를 공백으로
-  바꾸지도 않습니다.
+  바꾸지도 않습니다. `_ed_8a_b8`처럼 소문자로 된 것은 되돌리지 않으며, `inspect`가 이를 보면 안내 한 줄을 덧붙입니다.
 - **percent** (`%XX`): URL 인코딩입니다. 모든 바이트, 대소문자 모두 받습니다(`%20`은 공백). 뒤에 16진수 두
   자리가 없는 `%`는 글자로 둡니다(`100% done`). `+`는 그대로 `+`입니다. 공백을 뜻하는 것은 HTML 폼 데이터뿐입니다.
 - 이어진 이스케이프는 하나의 바이트열로 보고, 완전하고 유효한 UTF-8이어야 합니다. 하나라도 아니면(`_ED_8A`는
@@ -238,6 +238,9 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 ```powershell
 function Rename-Decoded {
     param([string]$Path = '.', [ValidateSet('underscore-hex', 'percent')][string]$Type = 'underscore-hex', [switch]$Apply)
+    # hanfix 0.2.7 and older read "decode ..." as text to convert and exit 0, which would rename every file.
+    $probe = (hanfix decode --type percent -- '%41' 2>$null) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $probe -ne 'A') { throw 'hanfix too old: update with hanfix --update' }
     $enc = [Console]::OutputEncoding
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
     try {

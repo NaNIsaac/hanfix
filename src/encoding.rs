@@ -151,19 +151,33 @@ pub fn inspect(text: &str) -> Vec<Candidate> {
         .collect()
 }
 
+/// Two `_xx` in a row, each 0x80 or more, with a lower-case hex letter: what an upper-case escape run
+/// would be. One such byte alone is never UTF-8, and `hello_bed` should not get the note.
+fn has_lower_case_underscore(text: &str) -> bool {
+    let byte = |w: &[u8]| {
+        w[0] == b'_' && w[1] >= b'8' && w[1..3].iter().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
+    };
+    text.as_bytes().windows(6).any(|w| byte(&w[..3]) && byte(&w[3..]) && w[1..].iter().any(|c| c.is_ascii_lowercase()))
+}
+
 /// The `hanfix inspect` report.
 pub fn report(text: &str) -> String {
     let found = inspect(text);
+    let note = if has_lower_case_underscore(text) {
+        "Note: lower-case _xx is not treated as an escape (underscore-hex is upper case only)\n"
+    } else {
+        ""
+    };
     if found.is_empty() {
         return format!(
-            "Detected: none\nReason: no underscore-hex or percent escape found; the text is kept as is\n\nOriginal:  {text}\n"
+            "Detected: none\nReason: no underscore-hex or percent escape found; the text is kept as is\n{note}\nOriginal:  {text}\n"
         );
     }
     let blocks: Vec<String> = found
         .iter()
         .map(|c| {
             let mut s = format!(
-                "Detected: {}\nStatus: {}\nEncoding: UTF-8\nReason: {}\n\nOriginal:  {text}\n",
+                "Detected: {}\nStatus: {}\nEncoding: UTF-8\nReason: {}\n{note}\nOriginal:  {text}\n",
                 c.kind.name(),
                 c.status.name(),
                 c.reason
@@ -251,5 +265,11 @@ mod tests {
         let c = inspect("%ED%8A%B8_EB_A6_AC");
         assert!(c.len() == 2 && c.iter().all(|c| c.status == Status::Ambiguous));
         assert!(report("100% done").starts_with("Detected: none\n"));
+        let note = "Note: lower-case _xx is not treated as an escape";
+        assert!(report("_ed_8a_b8").contains(note));
+        assert!(report("%ED%8A%B8_eb_a6_ac").contains(note));
+        for text in ["hello_bed", "backup_2026_10_29", "_ED_8A_B8", "a_7f"] {
+            assert!(!report(text).contains(note), "{text}");
+        }
     }
 }
