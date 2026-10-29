@@ -55,6 +55,18 @@ fn decode_failure_writes_nothing_to_stdout() {
 }
 
 #[test]
+fn replacement_character_in_the_result_fails() {
+    for (kind, text) in [("percent", "%EC%95%88%EF%BF%BD"), ("underscore-hex", "_EF_BF_BD")] {
+        let out = hanfix(&["decode", "--type", kind, text], None);
+        assert_eq!(out.status.code(), Some(1), "{text}");
+        assert!(out.stdout.is_empty(), "{text}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.contains("lossy: the decoded text contains U+FFFD"), "{text}: {err}");
+    }
+    assert!(stdout(&["inspect", "%EC%95%88%EF%BF%BD"]).contains("Status: invalid\nEncoding: UTF-8\nReason: lossy: "));
+}
+
+#[test]
 fn inspect_never_fails() {
     for text in ["hello_world", "100% done", "_ED_8A", "%GG", "트리"] {
         let out = stdout(&["inspect", text]);
@@ -96,4 +108,48 @@ fn keyboard_conversion_unchanged() {
     assert_eq!(stdout(&["dkssudgktpdy"]), "안녕하세요\n");
     let out = hanfix(&[], Some("햣 ㄴㅅㅁ션\n".as_bytes()));
     assert_eq!(out.stdout, b"git status\n");
+}
+
+#[test]
+fn mojibake() {
+    let w = ["decode", "--type", "mojibake", "--source-encoding", "windows-1252"];
+    fn with<'a>(w: &[&'a str], text: &'a str) -> Vec<&'a str> {
+        [w, &[text]].concat()
+    }
+    assert_eq!(stdout(&with(&w, "ì•ˆë…•")), "안녕\n");
+    assert_eq!(stdout(&with(&w, "report_í•œê¸€.pdf")), "report_한글.pdf\n");
+    assert_eq!(stdout(&["decode", "--type=mojibake", "--source-encoding=cp1252", "cafÃ©"]), "café\n");
+    let out = hanfix(&w, Some("íŠ¸ë¦¬\n".as_bytes()));
+    assert_eq!(out.stdout, "트리\n".as_bytes());
+    for (text, error) in [
+        ("ì•ˆ\u{FFFD}", "lossy: U+FFFD at character 3"),
+        ("안녕 ì•ˆë…•", "'안' (U+C548) at character 0 is not in windows-1252"),
+        ("ì•ˆë…", "incomplete UTF-8 sequence at character 3"),
+        ("ì•ˆë…•ï¿½", "lossy: the decoded text contains U+FFFD at character 2"),
+    ] {
+        let out = hanfix(&with(&w, text), None);
+        assert_eq!(out.status.code(), Some(1), "{text}");
+        assert!(out.stdout.is_empty(), "{text}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.starts_with("hanfix: error: ") && err.contains(error), "{text}: {err}");
+    }
+    let report = stdout(&["inspect", "ì•ˆë…•"]);
+    assert!(report.starts_with("Detected: mojibake\nStatus: valid\nEncoding: UTF-8 read as windows-1252\n"), "{report}");
+    assert!(report.ends_with("Candidate: 안녕\n"), "{report}");
+    assert!(stdout(&["inspect", "ì•ˆ\u{FFFD}"]).contains("Status: invalid\nEncoding: UTF-8 read as windows-1252\nReason: lossy: "));
+    let report = stdout(&["inspect", "ì•ˆë…•ï¿½"]);
+    assert!(report.contains("Status: invalid\nEncoding: UTF-8 read as windows-1252\nReason: lossy: "), "{report}");
+    assert!(!report.contains("Candidate") && !report.contains("twice"), "{report}");
+    for text in ["안녕하세요", "hello world", "café", "café’s", "résumé…", "„Café“", "«Café»"] {
+        assert!(stdout(&["inspect", text]).starts_with("Detected: none\n"), "{text}");
+    }
+    for args in [
+        &["decode", "--type", "mojibake", "ì•ˆë…•"][..],
+        &["decode", "--type", "mojibake", "--source-encoding", "cp949", "x"],
+        &["decode", "--type", "percent", "--source-encoding", "windows-1252", "x"],
+        &["decode", "--type", "mojibake", "--source-encoding", "cp1252", "--source-encoding", "cp1252", "x"],
+        &["inspect", "--source-encoding", "cp1252", "x"],
+    ] {
+        assert_eq!(hanfix(args, None).status.code(), Some(2), "{args:?}");
+    }
 }

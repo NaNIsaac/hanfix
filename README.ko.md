@@ -230,13 +230,50 @@ $ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
 - 두 형식에 나뉘어 들어간 바이트열(`%ED_8A_B8`)은 어느 쪽으로도 되돌리지 않습니다.
 - 이어진 이스케이프는 하나의 바이트열로 보고, 완전하고 유효한 UTF-8이어야 합니다. 하나라도 아니면(`_ED_8A`는
   3바이트 글자의 앞 2바이트) `decode`는 아무것도 출력하지 않고, 이유를 표준 오류에 쓰고, 종료 코드 1로 끝납니다.
-  `�`로 바꿔 넣지 않습니다. 표준 입력이 UTF-8이 아니면 `inspect`와 `decode` 모두 종료 코드 1로 끝납니다.
-- `decode`는 결과만 출력합니다. 이스케이프가 없는 글자는 그대로 나오고 종료 코드는 0입니다. `inspect`는 UTF-8
+  `�`로 바꿔 넣지 않습니다. 되돌린 결과에 `�`가 있어도 같은 방식으로 실패합니다(`%EF%BF%BD`가 바로 `�`).
+  이스케이프하기 전에 이미 글자가 손상되었다는 뜻입니다. 표준 입력이 UTF-8이 아니면 `inspect`와 `decode` 모두
+  종료 코드 1로 끝납니다.
+- `decode`는 결과만 출력합니다. 이스케이프가 없는(그리고 `�`가 없는) 글자는 그대로 나오고 종료 코드는 0입니다. `inspect`는 UTF-8
   글자에서 실패하지 않고 아무것도 바꾸지 않습니다.
 - `inspect`와 `decode`는 첫 번째 인자일 때만 하위 명령입니다. `hanfix -- inspect`와 `hf`는 지금처럼 글자를 변환합니다.
 - 유효한 UTF-8이라는 것은 바이트가 글자를 이룬다는 뜻일 뿐, 원래 뜻한 글이라는 보장은 아닙니다. 그래서 hanfix는
   스스로 되돌리지 않습니다. 형식은 사용자가 정하고, `inspect`로 후보를 먼저 볼 수 있습니다.
-- 모지바케(UTF-8을 다른 인코딩으로 읽은 글자, `안녕` 대신 `ì•ˆë…•`)는 아직 지원하지 않습니다.
+- 모지바케는 아래의 별도 형식으로 다룹니다.
+
+**모지바케**는 UTF-8 글자를 다른 인코딩으로 읽어서 깨진 글자입니다. UTF-8로 저장한 `안녕`을 windows-1252로 열면
+`ì•ˆë…•`이 됩니다. `--type mojibake`는 이 과정을 거꾸로 합니다. 각 글자를 windows-1252 바이트로 되돌리고, 그
+바이트를 UTF-8로 읽습니다.
+
+```console
+$ hanfix inspect 'ì•ˆë…•'
+Detected: mojibake
+Status: valid
+Encoding: UTF-8 read as windows-1252
+Reason: every character is in windows-1252, and its 6 bytes are valid UTF-8; valid UTF-8 does not prove this is the original text
+
+Original:  ì•ˆë…•
+Candidate: 안녕
+$ hanfix decode --type mojibake --source-encoding windows-1252 'ì•ˆë…•'
+안녕
+$ hanfix decode --type mojibake --source-encoding windows-1252 'ì•ˆ�'
+hanfix: error: lossy: U+FFFD at character 3 means a byte was already replaced; the original cannot be recovered
+```
+
+- `--source-encoding`(글자를 잘못 읽은 인코딩)는 꼭 지정해야 합니다. 지원하는 것은 `windows-1252`(`cp1252`도 같음)
+  하나입니다. 256바이트를 모두 대응시키며, Microsoft가 정의하지 않은 다섯 바이트(`81`, `8D`, `8F`, `90`, `9D`)는
+  브라우저처럼 같은 번호의 보이지 않는 제어 문자로 봅니다.
+- 글자 전체를 변환합니다. windows-1252에 없는 글자(`안녕 ì•ˆë…•`의 `안`)가 있거나 바이트가 완전한 UTF-8이 아니면
+  종료 코드 1로 실패하고 표준 출력에는 아무것도 나오지 않습니다.
+- `�`(U+FFFD)는 hanfix가 글자를 받기 전에 이미 어떤 바이트가 바뀌었다는 뜻입니다. 어느 바이트였는지는 어떤 도구도
+  알 수 없으므로 `decode`는 실패하고 `inspect`는 lossy(손실)로 알립니다. `�`의 세 바이트를 잘못 읽은 `ï¿½`도
+  결과에 `�`가 생기므로 마찬가지입니다. 복사해 붙여 넣는 과정에서 보이지 않는 제어 문자가 빠져도 되돌릴 수
+  없습니다.
+- `inspect`는 모지바케처럼 보일 때만 후보를 보여 줍니다. 몇 글자의 바이트가 완전한 UTF-8 여러 바이트 글자 하나를
+  이루는 경우입니다(`ì•ˆ`은 `EC 95 88`, `안`). 한글, ASCII, 일반 악센트 글자는 문장 부호가 붙어도(`café’s`,
+  `résumé…`, `«Café»`) 후보가 없습니다.
+  되돌린 결과가 다시 모지바케처럼 보이면 이유에 그렇게 적습니다(두 번 잘못 읽은 경우이니 결과를 한 번 더 되돌리세요).
+- CP949 / EUC-KR(UTF-8을 한국어 Windows 글자로 연 경우, `?덈뀞` 같은 출력)은 지원하지 않습니다. 약 17,000자의 표가
+  필요하고, 이런 잘못 읽기는 대개 도중에 바이트를 잃습니다.
 
 **이스케이프된 이름의 파일 여러 개를 한꺼번에 바꾸기 (PowerShell).** 함수를 정의한 뒤 폴더에서
 `Rename-Decoded`를 실행하면 `old -> new` 목록만 보여 줍니다. 실제로 바꾸려면 `-Apply`를 붙입니다. 되돌릴 수
@@ -283,6 +320,7 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --update
        hanfix inspect [--] [TEXT ...]
        hanfix decode --type {underscore-hex,percent} [--] [TEXT ...]
+       hanfix decode --type mojibake --source-encoding windows-1252 [--] [TEXT ...]
 ```
 
 | 옵션 | 설명 |
@@ -294,7 +332,8 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
 | `--init SHELL` | `hf` 함수를 정의하는 셸 코드를 출력합니다. |
 | `--alias NAME` | `--init`이 만드는 함수 이름입니다. 기본값은 `hf`입니다. |
 | `--` | 옵션의 끝을 표시합니다. 이후는 모두 글자로 봅니다. |
-| `--type TYPE` | `decode` 전용: `underscore-hex` 또는 `percent`. 꼭 지정해야 합니다. |
+| `--type TYPE` | `decode` 전용: `underscore-hex`, `percent`, `mojibake` 중 하나. 꼭 지정해야 합니다. |
+| `--source-encoding ENC` | `decode --type mojibake` 전용: `windows-1252`(또는 `cp1252`). 그때는 꼭 지정해야 합니다. |
 
 - 옵션은 맨 앞에서만 읽습니다. 나머지는 전부 변환할 글자로 봅니다. 그래서 `hanfix ㅣㄴ -ㅁ`의 `-ㅁ`은 옵션이 아니라 글자(`-a`)입니다.
 - `-`로 시작하는 영문 글자를 바꾸려면 앞에 `--`를 붙이세요: `hanfix -- -rk` → `-가`.
@@ -343,6 +382,8 @@ bind -x '"\eh": READLINE_LINE=$(hanfix -- "$READLINE_LINE"); READLINE_POINT=${#R
 - **`hf`는 한글을 영문으로만 바꿉니다.** 명령은 영문이므로 이 방향만 의미가 있습니다.
 - **한 줄에 한 방향만 바꿉니다.** `git ㅔㅕ노`처럼 영문과 한글이 섞여 있으면, 한글이 있으므로 전부 영문 쪽으로 바꿉니다. 의도한 한글 단어가 섞여 있으면 그것까지 영문이 됩니다.
 - **두벌식만 지원합니다.** 세벌식, 그리고 QWERTY가 아닌 영문 자판(Dvorak 등)은 지원하지 않습니다.
+- **분해형(NFD) 글자는 합치지 않습니다.** macOS 파일 이름은 `ì`를 `i`와 결합 악센트로 저장하기도 합니다. 이런 형태의
+  모지바케는 되돌리지 못하고 `inspect`도 찾지 못하므로, 먼저 NFC로 합치세요.
 
 ## 개발
 
