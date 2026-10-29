@@ -1,5 +1,7 @@
 //! hanfix: fix commands and text typed in the wrong keyboard layout (Korean 2-set <-> QWERTY).
 
+mod encoding;
+
 use std::io::{self, IsTerminal, Read, Write};
 use std::process::ExitCode;
 
@@ -248,6 +250,8 @@ fn init_script(shell: &str, name: &str) -> String {
 const USAGE: &str = "usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --init {bash,zsh,fish,powershell} [--alias NAME]
        hanfix --update
+       hanfix inspect [--] [TEXT ...]
+       hanfix decode --type {underscore-hex,percent} [--] [TEXT ...]
 ";
 
 fn help() -> String {
@@ -281,14 +285,22 @@ shell setup (add one line to your shell's start-up file):
 
   then, after a mistyped command, type hf (or ㅗㄹ); hf -y runs it without asking.
 
-exit status: 0 on success, 2 on a usage error.
+escaped text (only as the first argument; \"hanfix -- inspect\" converts the word):
+  hanfix inspect _ED_8A_B8_EB_A6_AC                  what the escapes are and what they decode to
+  hanfix decode --type underscore-hex _ED_8A_B8      트
+  hanfix decode --type percent %ED%8A%B8%EB%A6%AC    트리
+  decode prints only the result; text that is not an escape is kept. An incomplete or invalid
+  UTF-8 sequence prints nothing and fails.
+
+exit status: 0 on success, 1 when decode fails or the input of inspect or decode is not UTF-8,
+2 on a usage error.
 ",
         SHELLS.join(", ")
     )
 }
 
 fn usage_error(msg: &str) -> ExitCode {
-    eprint!("{USAGE}hanfix: error: {msg}\n");
+    eprintln!("{USAGE}hanfix: error: {msg}");
     ExitCode::from(2)
 }
 
@@ -328,7 +340,90 @@ fn update() -> ExitCode {
     }
 }
 
+fn read_stdin() -> Result<Vec<u8>, ExitCode> {
+    let mut buf = Vec::new();
+    io::stdin().read_to_end(&mut buf).map_err(|e| {
+        eprintln!("hanfix: error: cannot read standard input: {e}");
+        ExitCode::FAILURE
+    })?;
+    Ok(buf)
+}
+
+/// `hanfix inspect` and `hanfix decode`. Their text is read strictly as UTF-8: a decoder that
+/// replaced bad input bytes would hide the very damage it is asked about.
+fn escaped(cmd: &str, mut args: Vec<String>) -> ExitCode {
+    let mut kind = None;
+    while let Some(a) = args.first().cloned() {
+        if a == "--" {
+            args.remove(0);
+            break;
+        }
+        if a == "-h" || a == "--help" {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        let (opt, val) = a.split_once('=').map_or((a.as_str(), None), |(o, v)| (o, Some(v.to_string())));
+        if cmd != "decode" || opt != "--type" {
+            if a.starts_with('-') && a.len() > 1 && a.is_ascii() {
+                return usage_error(&format!("{cmd}: unknown option '{a}' (put -- before text that starts with -)"));
+            }
+            break;
+        }
+        args.remove(0);
+        let val = match val {
+            Some(v) => v,
+            None if !args.is_empty() => args.remove(0),
+            None => return usage_error("--type needs a value"),
+        };
+        if kind.is_some() {
+            return usage_error("--type given twice");
+        }
+        match encoding::Kind::parse(&val) {
+            Some(k) => kind = Some(k),
+            None => return usage_error(&format!("--type: choose underscore-hex or percent, not '{val}'")),
+        }
+    }
+    if cmd == "decode" && kind.is_none() {
+        return usage_error("decode needs --type underscore-hex or --type percent");
+    }
+    let text = if !args.is_empty() {
+        args.join(" ")
+    } else if io::stdin().is_terminal() {
+        return usage_error(&format!("{cmd}: no text given (pass it as arguments or on standard input)"));
+    } else {
+        let buf = match read_stdin() {
+            Ok(b) => b,
+            Err(code) => return code,
+        };
+        match String::from_utf8(buf) {
+            Ok(s) => s.trim_end_matches(['\n', '\r']).to_string(),
+            Err(e) => {
+                eprintln!("hanfix: error: standard input is not UTF-8 (at byte {})", e.utf8_error().valid_up_to());
+                return ExitCode::FAILURE;
+            }
+        }
+    };
+    let out = match kind {
+        None => encoding::report(&text),
+        Some(k) => match encoding::decode(k, &text) {
+            Ok(d) => d.text + "\n",
+            Err(e) => {
+                eprintln!("hanfix: error: {e}");
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    let _ = io::stdout().write_all(out.as_bytes());
+    ExitCode::SUCCESS
+}
+
 fn run(mut args: Vec<String>) -> ExitCode {
+    // Subcommands only in the first place, so "hanfix -- inspect" and the shell functions'
+    // "hanfix --to en -- $last" still convert the word.
+    if let Some(cmd @ ("inspect" | "decode")) = args.first().map(String::as_str) {
+        let cmd = cmd.to_string();
+        return escaped(&cmd, args.split_off(1));
+    }
     let (mut to, mut shell, mut name) = (None, None, "hf".to_string());
     // Leading options only: the text itself may start with "-" ("-ㅁ" is a mistyped "-a").
     while let Some(a) = args.first().cloned() {
@@ -394,11 +489,10 @@ fn run(mut args: Vec<String>) -> ExitCode {
     } else if io::stdin().is_terminal() {
         return usage_error("no text given (pass it as arguments or on standard input)");
     } else {
-        let mut buf = Vec::new();
-        if let Err(e) = io::stdin().read_to_end(&mut buf) {
-            eprintln!("hanfix: error: cannot read standard input: {e}");
-            return ExitCode::FAILURE;
-        }
+        let buf = match read_stdin() {
+            Ok(b) => b,
+            Err(code) => return code,
+        };
         let text = String::from_utf8_lossy(&buf);
         fix(text.trim_end_matches(['\n', '\r']), to) + "\n"
     };

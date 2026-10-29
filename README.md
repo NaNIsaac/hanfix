@@ -195,12 +195,102 @@ hanfix --to en 한글           ->  gksrmf
 **The direction is automatic.** Text with any Hangul goes back to English keys; anything else is composed
 into Hangul. If the guess is wrong, use `--to ko` or `--to en`.
 
+### Decode escaped Korean text
+
+File names and URLs sometimes carry Korean as escaped UTF-8 bytes: `_ED_8A_B8_EB_A6_AC` or
+`%ED%8A%B8%EB%A6%AC` instead of `트리`. `hanfix inspect` explains what it finds; `hanfix decode` turns it back,
+using only the type you name.
+
+```console
+$ hanfix inspect _ED_8A_B8_EB_A6_AC
+Detected: underscore-hex
+Status: valid
+Encoding: UTF-8
+Reason: 6 escaped bytes are valid UTF-8; other characters are kept
+
+Original:  _ED_8A_B8_EB_A6_AC
+Candidate: 트리
+$ hanfix decode --type underscore-hex _ED_8A_B8_EB_A6_AC
+트리
+$ hanfix decode --type percent %ED%8A%B8%EB%A6%AC
+트리
+$ hanfix decode --type underscore-hex report__ED_8A_B8.pdf
+report_트.pdf
+$ printf '%s' '_ED_8A_B8' | hanfix decode --type underscore-hex
+트
+```
+
+- **underscore-hex** (`_XX`): `_` and two upper-case hex digits, for bytes `80`-`FF` only. ASCII never needs
+  escaping, so `backup_2026_10_29`, `hello_bed` and the first `_` of `report__ED_8A_B8` stay as they are, and
+  `__` never becomes a space. Lower-case runs such as `_ed_8a_b8` are not decoded; `inspect` adds a note
+  when it sees one.
+- A run of underscore-hex escapes also ends at a byte that cannot start a UTF-8 character (`80`-`BF`, `C0`,
+  `C1`, `F5`-`FF`), which stays text: `IMG_8123.JPG` and `test_99.txt` come back unchanged, and
+  `_ED_8A_B8_99.txt` becomes `트_99.txt`. A byte that does start a character still needs the rest of it, so
+  a name like `트리_DB_backup.sql` written as `_ED_8A_B8_EB_A6_AC_DB_backup.sql` fails: `_DB` starts a
+  two-byte character and nothing follows.
+- **percent** (`%XX`): URL encoding, any byte, either case (`%20` is a space). A `%` without two hex digits
+  after it is text (`100% done`). `+` stays `+`; it means a space only in HTML form data. Every `%XX` is an
+  escape, so `%ED%8A%B8%99` fails.
+- A byte sequence split between the two types (`%ED_8A_B8`) decodes with neither.
+- Consecutive escapes form one byte sequence that must be complete, valid UTF-8. If any sequence in the
+  text is not (`_ED_8A` is two bytes of a three-byte character), `decode` prints nothing, writes the reason to
+  standard error and exits with 1. It never substitutes `�`. Input on standard input that is not UTF-8
+  makes `inspect` and `decode` exit with 1 too.
+- `decode` prints only the result; text with no escapes comes back unchanged with exit 0. `inspect` never
+  fails on UTF-8 text and changes nothing.
+- `inspect` and `decode` are subcommands only as the first argument. `hanfix -- inspect` and `hf` still convert
+  the word as typed text.
+- Valid UTF-8 only means the bytes form characters, not that they are the text someone meant. That is why
+  hanfix never decodes on its own: you name the type, and `inspect` shows the candidate first.
+- Mojibake (UTF-8 read as another encoding, `ì•ˆë…•` for `안녕`) is not handled yet.
+
+**Rename many files with escaped names (PowerShell).** Define the function, then run `Rename-Decoded` in a
+folder: it only lists `old -> new`. Add `-Apply` to rename. It skips a name that does not decode, does not
+change, would not be a valid file name (control characters, a trailing dot or space, a Windows device name such as `NUL`), or would take the name
+of an existing file or of another file renamed in the same run (ignoring case).
+
+<!-- rename-example -->
+```powershell
+function Rename-Decoded {
+    param([string]$Path = '.', [ValidateSet('underscore-hex', 'percent')][string]$Type = 'underscore-hex', [switch]$Apply)
+    # hanfix 0.2.7 and older read "decode ..." as text to convert and exit 0, which would rename every file.
+    $probe = (hanfix decode --type percent -- '%41' 2>$null) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $probe -ne 'A') { throw 'hanfix too old: update with hanfix --update' }
+    # Every name in the folder and every new name planned so far, ignoring case, so the preview lists
+    # exactly what -Apply does.
+    $taken = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    Get-ChildItem -LiteralPath $Path -Force -Name | ForEach-Object { [void]$taken.Add($_) }
+    $enc = [Console]::OutputEncoding
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    try {
+        foreach ($f in Get-ChildItem -LiteralPath $Path -File) {
+            $out = @(hanfix decode --type $Type -- $f.Name 2>$null)
+            if ($LASTEXITCODE -ne 0) { Write-Warning "skip $($f.Name): does not decode"; continue }
+            $new = $out[0]
+            if ($new -ceq $f.Name) { continue }
+            # One line, no control characters, no trailing dot or space, which Windows drops ("a." -> "a"),
+            # and no Windows device name.
+            if ($out.Count -ne 1 -or $new -match '[\x00-\x1F\x7F]|[. ]$|^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)' -or
+                $new.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+                Write-Warning "skip $($f.Name): '$new' is not a file name"; continue
+            }
+            if (-not $taken.Add($new)) { Write-Warning "skip $($f.Name): $new exists or is planned"; continue }
+            "$($f.Name) -> $new"
+            if ($Apply) { Rename-Item -LiteralPath $f.FullName -NewName $new }
+        }
+    } finally { [Console]::OutputEncoding = $enc }
+}
+```
+
 ### Options
 
 ```
 usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
        hanfix --init {bash,zsh,fish,powershell} [--alias NAME]
        hanfix --update
+       hanfix inspect [--] [TEXT ...]
+       hanfix decode --type {underscore-hex,percent} [--] [TEXT ...]
 ```
 
 | Option | Description |
@@ -212,11 +302,13 @@ usage: hanfix [-h] [-V] [--to {ko,en}] [--] [TEXT ...]
 | `--init SHELL` | Print the shell code that defines `hf`. |
 | `--alias NAME` | Name of the function `--init` defines. Default `hf`. |
 | `--` | End of options. Everything after is text. |
+| `--type TYPE` | `decode` only: `underscore-hex` or `percent`. Required. |
 
 - Options are read only at the start; the rest is text to convert. So the `-ㅁ` in `hanfix ㅣㄴ -ㅁ` is
   text (`-a`), not an option.
 - To convert English text that starts with `-`, put `--` first: `hanfix -- -rk` → `-가`.
-- Exit status: 0 on success, 2 on a usage error.
+- Exit status: 0 on success, 1 when `decode` fails or the input of `inspect` or `decode` is not UTF-8, 2 on
+  a usage error.
 
 ### Fix the line you are typing (optional)
 
@@ -268,9 +360,9 @@ Characters that are not on the layout (digits, spaces, symbols) are left as they
 ## Development
 
 ```sh
-cargo test           # composition cases, round trip of all 11,172 Hangul syllables, shell code
+cargo test           # composition cases, round trip of all 11,172 Hangul syllables, shell code, decode cases, the CLI
 sh tests/shells.sh   # in bash, zsh and fish, hf actually runs the fixed command (uses the installed hanfix)
-pwsh tests/shells.ps1
+pwsh tests/shells.ps1  # the same in PowerShell, and the Rename-Decoded example above
 ```
 
 The setup steps under Quick install are tested too. A `<!-- test -->` comment before a code block marks it, and CI runs
