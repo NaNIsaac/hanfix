@@ -90,6 +90,40 @@ you press Enter. It works on Linux, macOS and Windows, with bash, zsh, fish and 
 
 ![hanfix demo](assets/demo.gif)
 
+## How the correction works
+
+The following is an **illustrative terminal interaction**, not a screenshot or a recorded run. `hf` reads the previous command from your shell history; it does not monitor your keystrokes.
+
+```text
+  Korean keyboard layout is still active
+  ┌───────────────────────────────────────┐
+  │ $ ㅣㄴ -ㅁ                              │
+  │ bash: ㅣㄴ: command not found           │
+  └───────────────────────────────────────┘
+                    │
+                    ▼
+  ┌───────────────────────────────────────┐
+  │ $ ㅗㄹ                                  │
+  │ ls -a           [Enter / Ctrl+C]      │
+  └───────────────────────────────────────┘
+            │                   │
+         Enter                Ctrl+C
+            ▼                   ▼
+      Run corrected        Cancel without
+      command              running it
+```
+
+```mermaid
+flowchart LR
+    A["Previous shell command"] --> B["hf / ㅗㄹ"]
+    B --> C["Map Korean 2-set keys to QWERTY"]
+    C --> D{"Confirm?"}
+    D -->|Enter| E["Execute corrected command"]
+    D -->|Ctrl+C| F["Cancel"]
+```
+
+**Important:** `hf -y` skips confirmation. Use the normal `hf` first when the corrected command could modify files.
+
 ## Install
 
 **Linux / macOS**
