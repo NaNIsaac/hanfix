@@ -70,6 +70,12 @@ $ hanfix dkssudgktpdy
 
 ![hanfix demo](assets/demo.gif)
 
+## 동작 과정 한눈에 보기
+
+![한글 자판으로 잘못 입력한 ㅣㄴ -ㅁ 명령을 hf 또는 ㅗㄹ로 ls -a로 복구하고, Enter 실행 또는 Ctrl+C 취소를 선택하는 터미널 모의 그림](assets/keyboard-recovery-ko.svg)
+
+[그림을 크게 보기](assets/keyboard-recovery-ko.svg) · **설명용 모의 화면**이며 실제 실행 화면을 촬영한 것은 아닙니다. `hf`는 키 입력을 감시하지 않고 셸의 직전 명령 기록을 읽습니다.
+
 ```console
 $ ㅣㄴ -ㅁ
 bash: ㅣㄴ: command not found
