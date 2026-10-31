@@ -92,35 +92,9 @@ you press Enter. It works on Linux, macOS and Windows, with bash, zsh, fish and 
 
 ## How the correction works
 
-The following is an **illustrative terminal interaction**, not a screenshot or a recorded run. `hf` reads the previous command from your shell history; it does not monitor your keystrokes.
+![Mobile-friendly mock terminal: a mistyped Korean-layout command is recovered as ls -a, then Enter executes or Ctrl+C cancels.](assets/keyboard-recovery-en.svg)
 
-```text
-  Korean keyboard layout is still active
-  ┌───────────────────────────────────────┐
-  │ $ ㅣㄴ -ㅁ                              │
-  │ bash: ㅣㄴ: command not found           │
-  └───────────────────────────────────────┘
-                    │
-                    ▼
-  ┌───────────────────────────────────────┐
-  │ $ ㅗㄹ                                  │
-  │ ls -a           [Enter / Ctrl+C]      │
-  └───────────────────────────────────────┘
-            │                   │
-         Enter                Ctrl+C
-            ▼                   ▼
-      Run corrected        Cancel without
-      command              running it
-```
-
-```mermaid
-flowchart LR
-    A["Previous shell command"] --> B["hf / ㅗㄹ"]
-    B --> C["Map Korean 2-set keys to QWERTY"]
-    C --> D{"Confirm?"}
-    D -->|Enter| E["Execute corrected command"]
-    D -->|Ctrl+C| F["Cancel"]
-```
+[View the full-size diagram](assets/keyboard-recovery-en.svg). This is a **mock terminal**, not a screenshot or recorded run. `hf` reads the previous command from your shell history; it does not monitor keystrokes.
 
 **Important:** `hf -y` skips confirmation. Use the normal `hf` first when the corrected command could modify files.
 
