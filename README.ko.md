@@ -10,11 +10,11 @@
 
 **1. 최신 릴리스 설치**
 
-**Windows (PowerShell)**
+**Windows (cmd 또는 PowerShell)**
 
 <!-- test windows -->
 ```powershell
-irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+powershell -ExecutionPolicy Bypass -c "irm -useb https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex"
 ```
 
 **Linux / macOS**
@@ -102,10 +102,10 @@ Switched to a new branch 'fix-typo'
 curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
 ```
 
-**Windows (PowerShell)**
+**Windows (cmd 또는 PowerShell)**
 
 ```powershell
-irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+powershell -ExecutionPolicy Bypass -c "irm -useb https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex"
 ```
 
 설치 스크립트는 다음을 합니다.
