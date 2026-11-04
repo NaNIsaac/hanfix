@@ -1,5 +1,5 @@
 # hanfix installer for Windows:
-#   irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+#   powershell -ExecutionPolicy Bypass -c "irm -useb https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex"
 # Puts hanfix.exe in $env:HANFIX_INSTALL_DIR (default %LOCALAPPDATA%\Programs\hanfix) and adds it to
 # the user PATH. Pin a release with $env:HANFIX_VERSION = 'v0.2.3'. Run it again (or hanfix --update) to update.
 $ErrorActionPreference = 'Stop'

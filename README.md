@@ -10,11 +10,11 @@
 
 **1. Install the latest release**
 
-**Windows (PowerShell)**
+**Windows (cmd or PowerShell)**
 
 <!-- test windows -->
 ```powershell
-irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+powershell -ExecutionPolicy Bypass -c "irm -useb https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex"
 ```
 
 **Linux / macOS**
@@ -106,10 +106,10 @@ you press Enter. It works on Linux, macOS and Windows, with bash, zsh, fish and 
 curl -fsSL https://github.com/NaNIsaac/hanfix/releases/latest/download/install.sh | sh
 ```
 
-**Windows (PowerShell)**
+**Windows (cmd or PowerShell)**
 
 ```powershell
-irm https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex
+powershell -ExecutionPolicy Bypass -c "irm -useb https://github.com/NaNIsaac/hanfix/releases/latest/download/install.ps1 | iex"
 ```
 
 The install script:
