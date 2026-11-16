@@ -10,25 +10,35 @@ on:
       - pyproject.toml
       - Cargo.toml
       - .github/workflows/publish.yml
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        # macOS wheels build only on release tags or manual dispatch
+        run: |
+          base='{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu","manylinux":"auto"},{"os":"ubuntu-latest","target":"x86_64-unknown-linux-musl","manylinux":"musllinux_1_2"},{"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu","manylinux":"auto"},{"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-musl","manylinux":"musllinux_1_2"},{"os":"windows-latest","target":"x86_64-pc-windows-msvc"},{"os":"windows-latest","target":"aarch64-pc-windows-msvc"}'
+          macos='{"os":"macos-latest","target":"aarch64-apple-darwin"},{"os":"macos-latest","target":"x86_64-apple-darwin"}'
+          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            echo "matrix={\"include\":[$base,$macos]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix={\"include\":[$base]}" >> "$GITHUB_OUTPUT"
+          fi
+
   wheels:
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, manylinux: auto }
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, manylinux: musllinux_1_2 }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, manylinux: auto }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, manylinux: musllinux_1_2 }
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
-          - { os: windows-latest, target: aarch64-pc-windows-msvc }
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
