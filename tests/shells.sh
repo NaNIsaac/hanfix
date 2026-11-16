@@ -5,6 +5,7 @@ set -u
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 fail=0
 esc=$(printf '\033')
+bel=$(printf '\007')
 for sh in bash zsh fish; do
     command -v "$sh" >/dev/null 2>&1 || { echo "skip $sh (not installed)"; continue; }
     case $sh in
@@ -19,7 +20,7 @@ for sh in bash zsh fish; do
     # One line per second: fish discards typed-ahead input after a failed command.
     # The setup is sourced twice: the runner names must still be listed once.
     out=$(for line in "$init" "$init" "$cdg" 'ㄷ초ㅐ hanfix-ok' 'hf -y' 'ㅗㄹ -y' exit; do printf '%s\n' "$line"; sleep 1; done |
-        HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | tr -d '\r\007' | sed "s/$esc[]P][^$esc]*$esc[\\]//g; s/$esc\[[0-9;?>]*[A-Za-z]//g; s/$esc[()][A-Z0-9]//g; s/$esc[=>]//g")
+        HOME=$home timeout 30 script -qec "$run" /dev/null 2>&1 | sed "s/$esc\][^$esc$bel]*$bel//g; s/$esc[]P][^$esc]*$esc[\\]//g; s/$esc\[[0-9;?>]*[A-Za-z]//g; s/$esc[()][A-Z0-9]//g; s/$esc[=>]//g" | tr -d '\r\007')
     # fish keeps no history entry for the fixed command, so its second call runs the same fix again
     if [ "$sh" = fish ]; then second='[ "$(printf "%s\n" "$out" | grep -cx hanfix-ok)" -eq 2 ]'
     else second='printf "%s\n" "$out" | grep -q "nothing to fix" && printf "%s\n" "$out" | grep -qx "runners: hf ㅗㄹ" &&
