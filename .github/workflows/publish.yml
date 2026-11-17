@@ -49,7 +49,7 @@ jobs:
           args: --release --locked --out dist
       - uses: actions/upload-artifact@v7
         with:
-          name: wheel-${{ matrix.target }}
+          name: dist-wheel-${{ matrix.target }}
           path: dist
 
   sdist:
@@ -67,19 +67,35 @@ jobs:
           args: --out dist
       - uses: actions/upload-artifact@v7
         with:
-          name: sdist
+          name: dist-sdist
           path: dist
 
-  publish:
+  # The files above, checked for secrets, credential file names and home-folder paths;
+  # maturin builds them, so the gates only scan (leak-only)
+  gates:
     needs: [wheels, sdist]
+    uses: NaNIsaac/.github/.github/workflows/publish-gates.yml@3c147080c0d6968e7ec3fa6e5a848f5ae7bce7c8
+    permissions:
+      contents: read
+    with:
+      leak-only-artifacts: dist-*
+      # GitHub runner homes in the SBOM maturin writes into the Linux and macOS wheels
+      path-allowlist: |
+        /home/runner
+        /Users/runner
+
+  publish:
+    needs: gates
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     environment: release
     permissions:
       id-token: write  # PyPI Trusted Publishing
     steps:
+      # The same artifacts the gates checked
       - uses: actions/download-artifact@v8
         with:
+          pattern: dist-*
           path: dist
           merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
